@@ -719,6 +719,7 @@ window.viewCotacao = function(id) {
                             <p><strong>Documento:</strong> ${cotacao.documento}</p>
                             ${cotacao.vendedor ? `<p><strong>Vendedor:</strong> ${cotacao.vendedor}</p>` : ''}
                             <p><strong>Status:</strong> <span class="badge ${cotacao.negocioFechado ? 'fechada' : 'aberta'}">${cotacao.negocioFechado ? 'APROVADA' : 'REPROVADA'}</span></p>
+                       ✓
                         </div>
                     </div>
 
