@@ -8,10 +8,8 @@ let cotacoes = [];
 let isOnline = false;
 let lastDataHash = '';
 let sessionToken = null;
-let currentTab = 0;
 let currentMonth = new Date().getMonth();
 let currentYear = new Date().getFullYear();
-const tabs = ['tab-geral', 'tab-transportadora', 'tab-detalhes'];
 
 const meses = [
     'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -189,13 +187,18 @@ function updateConnectionStatus() {
 }
 
 // ============================================
-// MAPEAMENTO DE COLUNAS
+// MAPEAMENTO DE COLUNAS - CORRIGIDO
 // ============================================
 function mapearCotacao(cotacao) {
+    // CORREÇÃO: Normalizar responsável
+    let responsavel = cotacao.responsavel || cotacao.RESPONSAVEL || '';
+    if (responsavel.toLowerCase() === 'gustavo') responsavel = 'GUSTAVO';
+    if (responsavel.toLowerCase() === 'isaque') responsavel = 'ISAQUE';
+
     return {
         id: cotacao.id,
         timestamp: cotacao.timestamp,
-        responsavel: cotacao.responsavel || cotacao.RESPONSAVEL || '',
+        responsavel: responsavel,
         documento: cotacao.documento || cotacao.DOCUMENTO || '',
         vendedor: cotacao.vendedor || cotacao.VENDEDOR || '',
         transportadora: cotacao.transportadora || cotacao.TRANSPORTADORA || '',
@@ -299,7 +302,7 @@ window.toggleNegocioFechado = async function(id) {
 };
 
 // ============================================
-// FORMULÁRIO
+// FORMULÁRIO - CORRIGIDO
 // ============================================
 window.toggleForm = function() {
     showFormModal(null);
@@ -328,9 +331,9 @@ function showFormModal(editingId = null) {
                 
                 <div class="tabs-container">
                     <div class="tabs-nav">
-                        <button class="tab-btn active" onclick="switchTab(0)">Geral</button>
-                        <button class="tab-btn" onclick="switchTab(1)">Transportadora</button>
-                        <button class="tab-btn" onclick="switchTab(2)">Detalhes</button>
+                        <button class="tab-btn active" onclick="switchFormTab(0)">Geral</button>
+                        <button class="tab-btn" onclick="switchFormTab(1)">Transportadora</button>
+                        <button class="tab-btn" onclick="switchFormTab(2)">Detalhes</button>
                     </div>
 
                     <form id="cotacaoForm" onsubmit="handleSubmit(event)">
@@ -425,8 +428,7 @@ function showFormModal(editingId = null) {
                         </div>
 
                         <div class="modal-actions">
-                            <button type="button" class="secondary" id="btnVoltar" onclick="previousTab()" style="display: none;">Voltar</button>
-                            <button type="button" class="secondary" id="btnProximo" onclick="nextTab()">Próximo</button>
+                            <button type="submit" class="save">${isEditing ? 'Atualizar' : 'Salvar'}</button>
                             <button type="button" class="secondary" onclick="closeFormModal()">Cancelar</button>
                         </div>
                     </form>
@@ -436,10 +438,7 @@ function showFormModal(editingId = null) {
     `;
 
     document.body.insertAdjacentHTML('beforeend', modalHTML);
-    currentTab = 0;
-    updateNavigationButtons();
     
-    // MAIÚSCULAS automáticas
     const camposMaiusculas = ['documento', 'destino', 'numeroCotacao', 'canalComunicacao', 
                                'codigoColeta', 'responsavelTransportadora', 'observacoes'];
 
@@ -458,9 +457,6 @@ function showFormModal(editingId = null) {
 }
 
 function closeFormModal() {
-    const editId = document.getElementById('editId')?.value;
-    showMessage(editId ? 'Atualização cancelada' : 'Registro cancelado', 'error');
-    
     const modal = document.getElementById('formModal');
     if (modal) {
         modal.style.animation = 'fadeOut 0.2s ease forwards';
@@ -469,76 +465,23 @@ function closeFormModal() {
 }
 
 // ============================================
-// SISTEMA DE ABAS
+// SISTEMA DE ABAS - CORRIGIDO
 // ============================================
-function switchTab(index) {
-    currentTab = index;
+window.switchFormTab = function(index) {
+    const tabButtons = document.querySelectorAll('#formModal .tab-btn');
+    const tabContents = document.querySelectorAll('#formModal .tab-content');
     
-    document.querySelectorAll('#formModal .tab-btn').forEach((btn, i) => {
+    tabButtons.forEach((btn, i) => {
         btn.classList.toggle('active', i === index);
     });
     
-    document.querySelectorAll('#formModal .tab-content').forEach((content, i) => {
+    tabContents.forEach((content, i) => {
         content.classList.toggle('active', i === index);
     });
-    
-    updateNavigationButtons();
-}
-
-function nextTab() {
-    if (currentTab < tabs.length - 1) {
-        const currentTabElement = document.getElementById(tabs[currentTab]);
-        const requiredInputs = currentTabElement.querySelectorAll('[required]');
-        let isValid = true;
-
-        requiredInputs.forEach(input => {
-            if (!input.value.trim()) {
-                isValid = false;
-                input.focus();
-            }
-        });
-
-        if (!isValid) {
-            showMessage('Preencha todos os campos obrigatórios', 'error');
-            return;
-        }
-
-        currentTab++;
-        switchTab(currentTab);
-    } else {
-        handleSubmit(new Event('submit'));
-    }
-}
-
-function previousTab() {
-    if (currentTab > 0) {
-        currentTab--;
-        switchTab(currentTab);
-    }
-}
-
-function updateNavigationButtons() {
-    const btnVoltar = document.getElementById('btnVoltar');
-    const btnProximo = document.getElementById('btnProximo');
-    
-    if (btnVoltar) {
-        btnVoltar.style.display = currentTab === 0 ? 'none' : 'inline-flex';
-    }
-    
-    if (btnProximo) {
-        const editId = document.getElementById('editId')?.value;
-        if (currentTab === tabs.length - 1) {
-            btnProximo.textContent = editId ? 'Atualizar' : 'Salvar';
-            btnProximo.className = 'save';
-        } else {
-            btnProximo.textContent = 'Próximo';
-            btnProximo.className = 'secondary';
-        }
-    }
-}
+};
 
 // ============================================
-// SUBMIT
+// SUBMIT - CORRIGIDO
 // ============================================
 async function handleSubmit(event) {
     if (event) event.preventDefault();
@@ -570,10 +513,9 @@ async function handleSubmit(event) {
         }
     }
 
-    closeFormModal();
-
     if (!isOnline) {
         showMessage('Sistema offline. Dados não foram salvos.', 'error');
+        closeFormModal();
         return;
     }
 
@@ -618,10 +560,12 @@ async function handleSubmit(event) {
         lastDataHash = JSON.stringify(cotacoes.map(c => c.id));
         updateAllFilters();
         filterCotacoes();
+        closeFormModal();
 
     } catch (error) {
         console.error('Erro:', error);
         showMessage(`Erro: ${error.message}`, 'error');
+        closeFormModal();
     }
 }
 
@@ -641,7 +585,7 @@ window.editCotacao = function(id) {
 };
 
 // ============================================
-// EXCLUSÃO COM MODAL BONITO
+// EXCLUSÃO
 // ============================================
 window.deleteCotacao = async function(id) {
     const confirmed = await showConfirm(
@@ -836,23 +780,19 @@ function filterCotacoes() {
     
     let filtered = [...cotacoes];
 
-    // Filtro por mês/ano
     filtered = filtered.filter(c => {
         const data = new Date(c.dataCotacao + 'T00:00:00');
         return data.getMonth() === currentMonth && data.getFullYear() === currentYear;
     });
 
-    // Filtro por transportadora
     if (filterTransportadora) {
         filtered = filtered.filter(c => c.transportadora === filterTransportadora);
     }
 
-    // Filtro por responsável
     if (filterResponsavel) {
         filtered = filtered.filter(c => c.responsavel === filterResponsavel);
     }
 
-    // Filtro por status
     if (filterStatus) {
         filtered = filtered.filter(c => {
             if (filterStatus === 'aberto') return !c.negocioFechado;
@@ -861,7 +801,6 @@ function filterCotacoes() {
         });
     }
 
-    // Busca textual
     if (searchTerm) {
         filtered = filtered.filter(c => 
             c.transportadora?.toLowerCase().includes(searchTerm) ||
@@ -960,19 +899,15 @@ function formatDateDDMMYYYY(dateString) {
 }
 
 function showMessage(message, type) {
-    // Remove mensagens antigas
     const oldMessages = document.querySelectorAll('.floating-message');
     oldMessages.forEach(msg => msg.remove());
     
-    // Cria nova mensagem flutuante
     const messageDiv = document.createElement('div');
     messageDiv.className = `floating-message ${type}`;
     messageDiv.textContent = message;
     
-    // Adiciona no body para aparecer acima do modal
     document.body.appendChild(messageDiv);
     
-    // Remove após 3 segundos
     setTimeout(() => {
         messageDiv.style.animation = 'slideOut 0.3s ease forwards';
         setTimeout(() => messageDiv.remove(), 300);
