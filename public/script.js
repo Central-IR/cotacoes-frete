@@ -894,7 +894,7 @@ function renderCotacoes(cotacoesToRender) {
             <table>
                 <thead>
                     <tr>
-                        <th style="text-align: center; width: 60px;">''</th>
+                        <th style="text-align: center; width: 60px;"> </th>
                         <th>Data</th>
                         <th>Transportadora</th>
                         <th>Destino</th>
