@@ -468,16 +468,30 @@ function closeFormModal() {
 // SISTEMA DE ABAS - CORRIGIDO
 // ============================================
 window.switchFormTab = function(index) {
-    const tabButtons = document.querySelectorAll('#formModal .tab-btn');
-    const tabContents = document.querySelectorAll('#formModal .tab-content');
-    
-    tabButtons.forEach((btn, i) => {
-        btn.classList.toggle('active', i === index);
-    });
-    
-    tabContents.forEach((content, i) => {
-        content.classList.toggle('active', i === index);
-    });
+    // Aguarda um pequeno delay para garantir que o DOM está pronto
+    setTimeout(() => {
+        const modal = document.getElementById('formModal');
+        if (!modal) return;
+        
+        const tabButtons = modal.querySelectorAll('.tab-btn');
+        const tabContents = modal.querySelectorAll('.tab-content');
+        
+        tabButtons.forEach((btn, i) => {
+            if (i === index) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+        
+        tabContents.forEach((content, i) => {
+            if (i === index) {
+                content.classList.add('active');
+            } else {
+                content.classList.remove('active');
+            }
+        });
+    }, 10);
 };
 
 // ============================================
@@ -708,13 +722,29 @@ function closeViewModal() {
 }
 
 window.switchViewTab = function(index) {
-    document.querySelectorAll('#viewModal .tab-btn').forEach((btn, i) => {
-        btn.classList.toggle('active', i === index);
-    });
-    
-    document.querySelectorAll('#viewModal .tab-content').forEach((content, i) => {
-        content.classList.toggle('active', i === index);
-    });
+    setTimeout(() => {
+        const modal = document.getElementById('viewModal');
+        if (!modal) return;
+        
+        const tabButtons = modal.querySelectorAll('.tab-btn');
+        const tabContents = modal.querySelectorAll('.tab-content');
+        
+        tabButtons.forEach((btn, i) => {
+            if (i === index) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+        
+        tabContents.forEach((content, i) => {
+            if (i === index) {
+                content.classList.add('active');
+            } else {
+                content.classList.remove('active');
+            }
+        });
+    }, 10);
 };
 
 // ============================================
