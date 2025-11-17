@@ -719,7 +719,6 @@ window.viewCotacao = function(id) {
                             <p><strong>Documento:</strong> ${cotacao.documento}</p>
                             ${cotacao.vendedor ? `<p><strong>Vendedor:</strong> ${cotacao.vendedor}</p>` : ''}
                             <p><strong>Status:</strong> <span class="badge ${cotacao.negocioFechado ? 'fechada' : 'aberta'}">${cotacao.negocioFechado ? 'APROVADA' : 'REPROVADA'}</span></p>
-                       ✓
                         </div>
                     </div>
 
@@ -895,7 +894,7 @@ function renderCotacoes(cotacoesToRender) {
             <table>
                 <thead>
                     <tr>
-                        <th style="text-align: center; width: 60px;">✓</th>
+                        <th style="text-align: center; width: 60px;">''</th>
                         <th>Data</th>
                         <th>Transportadora</th>
                         <th>Destino</th>
@@ -913,6 +912,7 @@ function renderCotacoes(cotacoesToRender) {
                                 <button class="check-btn ${c.negocioFechado ? 'checked' : ''}" 
                                         onclick="toggleNegocioFechado('${c.id}')" 
                                         title="${c.negocioFechado ? 'Marcar como reprovada' : 'Marcar como aprovada'}">
+                                        ✓
                                 </button>
                             </td>
                             <td>${formatDate(c.dataCotacao)}</td>
