@@ -164,7 +164,7 @@ async function checkServerStatus() {
         isOnline = response.ok;
         
         if (wasOffline && isOnline) {
-            console.log('✅ Servidor ONLINE');
+            console.log('✅ SERVIDOR ONLINE');
             await loadCotacoes();
         }
         
@@ -242,12 +242,12 @@ async function loadCotacoes() {
         const newHash = JSON.stringify(cotacoes.map(c => c.id));
         if (newHash !== lastDataHash) {
             lastDataHash = newHash;
-            console.log(`📊 ${cotacoes.length} cotações carregadas`);
+            console.log(`${cotacoes.length} cotações carregadas`);
             updateAllFilters();
             filterCotacoes();
         }
     } catch (error) {
-        console.error('❌ Erro ao carregar:', error);
+        console.error('Erro ao carregar:', error);
     }
 }
 
@@ -620,7 +620,7 @@ async function handleSubmit(event) {
         filterCotacoes();
 
     } catch (error) {
-        console.error('❌ Erro:', error);
+        console.error('Erro:', error);
         showMessage(`Erro: ${error.message}`, 'error');
     }
 }
@@ -912,7 +912,6 @@ function renderCotacoes(cotacoesToRender) {
                                 <button class="check-btn ${c.negocioFechado ? 'checked' : ''}" 
                                         onclick="toggleNegocioFechado('${c.id}')" 
                                         title="${c.negocioFechado ? 'Marcar como reprovada' : 'Marcar como aprovada'}">
-                                    ✓
                                 </button>
                             </td>
                             <td>${formatDate(c.dataCotacao)}</td>
