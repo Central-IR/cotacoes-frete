@@ -349,6 +349,7 @@ function showFormModal(editingId = null) {
                                         <option value="ISAQUE" ${cotacao?.responsavel === 'ISAQUE' ? 'selected' : ''}>ISAQUE</option>
                                         <option value="MIGUEL" ${cotacao?.responsavel === 'MIGUEL' ? 'selected' : ''}>MIGUEL</option>
                                         <option value="GUSTAVO" ${cotacao?.responsavel === 'GUSTAVO' ? 'selected' : ''}>GUSTAVO</option>
+                                        <option value="GUSTAVO" ${cotacao?.responsavel === 'LUIZ' ? 'selected' : ''}>LUIZ</option>
                                     </select>
                                 </div>
                                 <div class="form-group">
