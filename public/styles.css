@@ -52,7 +52,6 @@ body {
     background: var(--bg-secondary);
     color: var(--text-primary);
     line-height: 1.6;
-    /* Força scrollbar a aparecer sempre, evitando movimentação */
     overflow-y: scroll;
 }
 
@@ -104,7 +103,7 @@ body {
 .container {
     max-width: 1800px;
     margin: 2rem auto;
-    padding: 0 1.5rem;
+    padding: 0 2rem 5rem 2rem; /* Espaço extra no bottom para o botão flutuante */
 }
 
 .card {
@@ -208,6 +207,7 @@ input, select, textarea {
     color: var(--text-primary);
     font-size: 0.95rem;
     font-family: inherit;
+    transition: all 0.2s ease;
 }
 
 textarea {
@@ -234,6 +234,7 @@ button {
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
+    transition: opacity 0.3s;
 }
 
 button:hover:not(:disabled) { opacity: 0.9; }
@@ -472,13 +473,13 @@ tbody tr.fechada:hover {
     color: var(--text-secondary);
     font-size: 0.9rem;
     font-weight: 600;
-    cursor: pointer; /* MUDADO de default para pointer */
+    cursor: pointer;
     border-bottom: 3px solid transparent;
     transition: all 0.3s ease;
     white-space: nowrap;
     margin: 0;
     border-radius: 0;
-    pointer-events: auto; /* MUDADO de none para auto */
+    pointer-events: auto;
 }
 
 .tab-btn:hover {
@@ -541,7 +542,6 @@ tbody tr.fechada:hover {
 }
 
 .hidden { display: none !important; }
-.button-wrapper { margin-bottom: 1.5rem; }
 
 /* NAVEGAÇÃO POR MESES */
 .month-navigation {
@@ -586,12 +586,49 @@ tbody tr.fechada:hover {
     transform: translateY(0);
 }
 
+/* ============================================
+   BOTÃO FLUTUANTE
+   ============================================ */
+.floating-add-btn {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: var(--btn-register);
+    color: white;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 119, 199, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    z-index: 1000;
+    padding: 0;
+    margin: 0;
+}
+
+.floating-add-btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 20px rgba(0, 119, 199, 0.6);
+}
+
+.floating-add-btn:active {
+    transform: scale(0.95);
+}
+
+.floating-add-btn svg {
+    width: 28px;
+    height: 28px;
+}
+
 @media (max-width: 768px) {
-    .container { padding: 0 1rem; margin: 1rem auto; }
+    .container { padding: 0 1rem 5rem 1rem; margin: 1rem auto; }
     .header { flex-direction: column; align-items: flex-start; }
     h1 { font-size: 1.5rem; }
-    .splash-logo { width: 220px; }
-    .splash-title { font-size: 1.3rem; margin-top: -8px; }
+    .splash-title { font-size: 1.3rem; }
     table { font-size: 0.85rem; }
     th, td { padding: 10px 8px; }
     button { padding: 10px 16px; font-size: 0.9rem; }
@@ -604,4 +641,17 @@ tbody tr.fechada:hover {
     .tab-btn { font-size: 0.8rem; padding: 10px 15px; }
     .actions-cell { min-width: auto; }
     .month-navigation { gap: 1rem; }
+    
+    /* Botão flutuante menor no mobile */
+    .floating-add-btn {
+        width: 56px;
+        height: 56px;
+        bottom: 1.5rem;
+        right: 1.5rem;
+    }
+    
+    .floating-add-btn svg {
+        width: 24px;
+        height: 24px;
+    }
 }
