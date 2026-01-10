@@ -22,32 +22,21 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 console.log('✅ Supabase configurado:', supabaseUrl);
 
 // ==========================================
-// ======== CORS - PERMITE TODOS OS DOMÍNIOS
+// ======== CORS - CONFIGURAÇÃO ÚNICA =======
 // ==========================================
 app.use(cors({
-    origin: '*', // Permite qualquer origem
+    origin: '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'HEAD', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Session-Token', 'Accept'],
-    credentials: false
+    credentials: false,
+    preflightContinue: false,
+    optionsSuccessStatus: 204
 }));
-
-// Adiciona headers CORS manualmente também
-app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, HEAD, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Session-Token, Accept');
-    
-    // Responde OPTIONS request imediatamente
-    if (req.method === 'OPTIONS') {
-        return res.sendStatus(200);
-    }
-    next();
-});
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Log detalhado de requisições
+// Log de requisições
 app.use((req, res, next) => {
     console.log(`📥 ${new Date().toISOString()} - ${req.method} ${req.path}`);
     next();
@@ -57,20 +46,15 @@ app.use((req, res, next) => {
 // ======== MIDDLEWARE DE AUTENTICAÇÃO ======
 // ==========================================
 const PORTAL_URL = process.env.PORTAL_URL || 'https://ir-comercio-portal-zcan.onrender.com';
-
 console.log('🔐 Portal URL configurado:', PORTAL_URL);
 
 async function verificarAutenticacao(req, res, next) {
-    // Rotas públicas que NÃO precisam de autenticação
     const publicPaths = ['/', '/health', '/app'];
     if (publicPaths.includes(req.path)) {
         return next();
     }
 
-    // Pegar token da sessão
     const sessionToken = req.headers['x-session-token'] || req.query.sessionToken;
-
-    console.log('🔑 Token recebido:', sessionToken ? `${sessionToken.substring(0, 20)}...` : 'NENHUM');
 
     if (!sessionToken) {
         console.log('❌ Token não encontrado');
@@ -82,19 +66,21 @@ async function verificarAutenticacao(req, res, next) {
     }
 
     try {
-        console.log('🔍 Verificando sessão no portal:', PORTAL_URL);
-        
-        // Verificar se a sessão é válida no Portal Central
+        // TIMEOUT de 5 segundos para verificação do portal
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+
         const verifyResponse = await fetch(`${PORTAL_URL}/api/verify-session`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sessionToken })
+            body: JSON.stringify({ sessionToken }),
+            signal: controller.signal
         });
 
-        console.log('📊 Resposta do portal:', verifyResponse.status);
+        clearTimeout(timeoutId);
 
         if (!verifyResponse.ok) {
-            console.log('❌ Resposta não OK do portal');
+            console.log('❌ Resposta não OK do portal:', verifyResponse.status);
             return res.status(401).json({
                 error: 'Sessão inválida',
                 message: 'Sua sessão expirou ou foi invalidada',
@@ -103,7 +89,6 @@ async function verificarAutenticacao(req, res, next) {
         }
 
         const sessionData = await verifyResponse.json();
-        console.log('📋 Dados da sessão:', sessionData.valid ? 'VÁLIDA' : 'INVÁLIDA');
 
         if (!sessionData.valid) {
             console.log('❌ Sessão marcada como inválida pelo portal');
@@ -114,14 +99,22 @@ async function verificarAutenticacao(req, res, next) {
             });
         }
 
-        // Adicionar informações do usuário na requisição
         req.user = sessionData.session;
         req.sessionToken = sessionToken;
-
-        console.log('✅ Autenticação bem-sucedida para:', sessionData.session?.username);
+        console.log('✅ Autenticação OK:', sessionData.session?.username);
         next();
+
     } catch (error) {
-        console.error('❌ Erro ao verificar autenticação:', error);
+        console.error('⚠️ Erro ao verificar autenticação:', error.message);
+        
+        // Se for timeout ou erro de rede, permitir acesso temporário
+        if (error.name === 'AbortError' || error.code === 'ENOTFOUND') {
+            console.log('⚠️ Portal indisponível - permitindo acesso temporário');
+            req.user = { username: 'temp' };
+            req.sessionToken = sessionToken;
+            return next();
+        }
+
         return res.status(500).json({
             error: 'Erro interno',
             message: 'Erro ao verificar autenticação'
@@ -133,7 +126,7 @@ async function verificarAutenticacao(req, res, next) {
 // ======== SERVIR ARQUIVOS ESTÁTICOS =======
 // ==========================================
 const publicPath = path.join(__dirname, 'public');
-console.log('📁 Pasta public:', publicPath);
+console.log('📂 Pasta public:', publicPath);
 
 app.use(express.static(publicPath, {
     index: 'index.html',
@@ -155,9 +148,9 @@ app.use(express.static(publicPath, {
 app.get('/health', async (req, res) => {
     console.log('💚 Health check requisitado');
     try {
-        const { error } = await supabase
+        const { error, count } = await supabase
             .from('cotacoes')
-            .select('count', { count: 'exact', head: true });
+            .select('*', { count: 'exact', head: true });
         
         res.json({
             status: error ? 'unhealthy' : 'healthy',
@@ -165,12 +158,12 @@ app.get('/health', async (req, res) => {
             supabase_url: supabaseUrl,
             portal_url: PORTAL_URL,
             timestamp: new Date().toISOString(),
-            publicPath: publicPath,
             authentication: 'enabled',
-            cors: 'enabled - all origins'
+            cors: 'enabled',
+            recordCount: count || 0
         });
     } catch (error) {
-        res.json({
+        res.status(500).json({
             status: 'unhealthy',
             error: error.message,
             timestamp: new Date().toISOString()
@@ -182,13 +175,12 @@ app.get('/health', async (req, res) => {
 // ======== ROTAS DA API ====================
 // ==========================================
 
-// Aplicar autenticação em todas as rotas da API
 app.use('/api', verificarAutenticacao);
 
 // Listar todas as cotações
 app.get('/api/cotacoes', async (req, res) => {
     try {
-        console.log('🔍 Buscando cotações...');
+        console.log('📋 Buscando cotações...');
         const { data, error } = await supabase
             .from('cotacoes')
             .select('*')
@@ -336,12 +328,7 @@ app.use((req, res) => {
     console.log('❌ Rota não encontrada:', req.path);
     res.status(404).json({
         error: '404 - Rota não encontrada',
-        path: req.path,
-        availableRoutes: {
-            interface: 'GET /',
-            health: 'GET /health',
-            api: 'GET /api/cotacoes'
-        }
+        path: req.path
     });
 });
 
@@ -364,20 +351,14 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Servidor rodando na porta ${PORT}`);
     console.log(`📊 Database: Supabase`);
     console.log(`🔗 Supabase URL: ${supabaseUrl}`);
-    console.log(`📁 Public folder: ${publicPath}`);
     console.log(`🔐 Autenticação: Ativa ✅`);
     console.log(`🌐 Portal URL: ${PORTAL_URL}`);
-    console.log(`🌍 CORS: Liberado para todos`);
-    console.log(`🔓 Rotas públicas: /, /health, /app`);
+    console.log(`🌐 CORS: Liberado`);
     console.log('🚀 ================================\n');
 });
 
-// Verificar se pasta public existe
+// Verificar pasta public
 const fs = require('fs');
 if (!fs.existsSync(publicPath)) {
     console.error('⚠️ AVISO: Pasta public/ não encontrada!');
-    console.error('📁 Crie a pasta e adicione os arquivos:');
-    console.error('   - public/index.html');
-    console.error('   - public/styles.css');
-    console.error('   - public/script.js');
 }
