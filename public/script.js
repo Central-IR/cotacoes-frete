@@ -1,106 +1,48 @@
-// ============================================
-// CONFIGURAÇÃO
-// ============================================
+const DEVELOPMENT_MODE = true;
 const PORTAL_URL = 'https://ir-comercio-portal-zcan.onrender.com';
 const API_URL = 'https://cotacoes-frete-aikc.onrender.com/api';
 
 let cotacoes = [];
+let currentMonth = new Date();
+let editingId = null;
+let currentTab = 0;
+let currentInfoTab = 0;
 let isOnline = false;
-let lastDataHash = '';
 let sessionToken = null;
-let currentMonth = new Date().getMonth();
-let currentYear = new Date().getFullYear();
+let lastDataHash = '';
 
-const meses = [
-    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
-];
+const tabs = ['tab-geral', 'tab-transportadora', 'tab-detalhes'];
 
 console.log('🚀 Cotações de Frete iniciada');
+console.log('📍 API URL:', API_URL);
+console.log('🔧 Modo desenvolvimento:', DEVELOPMENT_MODE);
 
-document.addEventListener('DOMContentLoaded', () => {
-    verificarAutenticacao();
-});
-
-// ============================================
-// NAVEGAÇÃO POR MESES
-// ============================================
-function updateMonthDisplay() {
-    const display = document.getElementById('currentMonthDisplay');
-    if (display) {
-        display.textContent = `${meses[currentMonth]} ${currentYear}`;
-    }
-    filterCotacoes();
+function toUpperCase(value) {
+    return value ? String(value).toUpperCase() : '';
 }
 
-window.previousMonth = function() {
-    currentMonth--;
-    if (currentMonth < 0) {
-        currentMonth = 11;
-        currentYear--;
-    }
-    updateMonthDisplay();
-};
-
-window.nextMonth = function() {
-    currentMonth++;
-    if (currentMonth > 11) {
-        currentMonth = 0;
-        currentYear++;
-    }
-    updateMonthDisplay();
-};
-
-// ============================================
-// MODAL DE CONFIRMAÇÃO PERSONALIZADO
-// ============================================
-function showConfirm(message, options = {}) {
-    return new Promise((resolve) => {
-        const { title = 'Confirmação', confirmText = 'Confirmar', cancelText = 'Cancelar', type = 'warning' } = options;
-
-        const modalHTML = `
-            <div class="modal-overlay" id="confirmModal" style="z-index: 10001;">
-                <div class="modal-content" style="max-width: 450px;">
-                    <div class="modal-header">
-                        <h3 class="modal-title">${title}</h3>
-                    </div>
-                    <p style="margin: 1.5rem 0; color: var(--text-primary); font-size: 1rem; line-height: 1.6;">${message}</p>
-                    <div class="modal-actions">
-                        <button class="secondary" id="modalCancelBtn">${cancelText}</button>
-                        <button class="${type === 'warning' ? 'danger' : 'success'}" id="modalConfirmBtn">${confirmText}</button>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        document.body.insertAdjacentHTML('beforeend', modalHTML);
-        const modal = document.getElementById('confirmModal');
-        const confirmBtn = document.getElementById('modalConfirmBtn');
-        const cancelBtn = document.getElementById('modalCancelBtn');
-
-        const closeModal = (result) => {
-            modal.style.animation = 'fadeOut 0.2s ease forwards';
-            setTimeout(() => { 
-                modal.remove(); 
-                resolve(result); 
-            }, 200);
-        };
-
-        confirmBtn.addEventListener('click', () => closeModal(true));
-        cancelBtn.addEventListener('click', () => closeModal(false));
-
-        if (!document.querySelector('#modalAnimations')) {
-            const style = document.createElement('style');
-            style.id = 'modalAnimations';
-            style.textContent = `@keyframes fadeOut { to { opacity: 0; } }`;
-            document.head.appendChild(style);
-        }
+function setupUpperCaseInputs() {
+    const textInputs = document.querySelectorAll('input[type="text"]:not([readonly]), textarea');
+    textInputs.forEach(input => {
+        input.addEventListener('input', function(e) {
+            const start = this.selectionStart;
+            const end = this.selectionEnd;
+            this.value = toUpperCase(this.value);
+            this.setSelectionRange(start, end);
+        });
     });
 }
 
-// ============================================
-// AUTENTICAÇÃO
-// ============================================
+document.addEventListener('DOMContentLoaded', () => {
+    if (DEVELOPMENT_MODE) {
+        console.log('⚠️ MODO DESENVOLVIMENTO ATIVADO');
+        sessionToken = 'dev-mode';
+        inicializarApp();
+    } else {
+        verificarAutenticacao();
+    }
+});
+
 function verificarAutenticacao() {
     const urlParams = new URLSearchParams(window.location.search);
     const tokenFromUrl = urlParams.get('sessionToken');
@@ -132,27 +74,29 @@ function mostrarTelaAcessoNegado(mensagem = 'NÃO AUTORIZADO') {
 }
 
 function inicializarApp() {
-    updateMonthDisplay();
+    updateDisplay();
     checkServerStatus();
     setInterval(checkServerStatus, 15000);
     startPolling();
 }
 
-// ============================================
-// CONEXÃO E STATUS
-// ============================================
 async function checkServerStatus() {
     try {
+        const headers = {
+            'Accept': 'application/json'
+        };
+        
+        if (!DEVELOPMENT_MODE && sessionToken) {
+            headers['X-Session-Token'] = sessionToken;
+        }
+
         const response = await fetch(`${API_URL}/cotacoes`, {
             method: 'GET',
-            headers: { 
-                'X-Session-Token': sessionToken,
-                'Accept': 'application/json'
-            },
+            headers: headers,
             mode: 'cors'
         });
 
-        if (response.status === 401) {
+        if (!DEVELOPMENT_MODE && response.status === 401) {
             sessionStorage.removeItem('cotacoesFreteSession');
             mostrarTelaAcessoNegado('Sua sessão expirou');
             return false;
@@ -169,6 +113,7 @@ async function checkServerStatus() {
         updateConnectionStatus();
         return isOnline;
     } catch (error) {
+        console.error('❌ Erro ao verificar servidor:', error);
         isOnline = false;
         updateConnectionStatus();
         return false;
@@ -177,80 +122,8 @@ async function checkServerStatus() {
 
 function updateConnectionStatus() {
     const statusElement = document.getElementById('connectionStatus');
-    const statusText = document.getElementById('statusText');
     if (statusElement) {
         statusElement.className = isOnline ? 'connection-status online' : 'connection-status offline';
-        if (statusText) {
-            statusText.textContent = isOnline ? 'Online' : 'Offline';
-        }
-    }
-}
-
-// ============================================
-// MAPEAMENTO DE COLUNAS - CORRIGIDO
-// ============================================
-function mapearCotacao(cotacao) {
-    // CORREÇÃO: Normalizar responsável
-    let responsavel = cotacao.responsavel || cotacao.RESPONSAVEL || '';
-    if (responsavel.toLowerCase() === 'gustavo') responsavel = 'GUSTAVO';
-    if (responsavel.toLowerCase() === 'isaque') responsavel = 'ISAQUE';
-
-    return {
-        id: cotacao.id,
-        timestamp: cotacao.timestamp,
-        responsavel: responsavel,
-        documento: cotacao.documento || cotacao.DOCUMENTO || '',
-        vendedor: cotacao.vendedor || cotacao.VENDEDOR || '',
-        transportadora: cotacao.transportadora || cotacao.TRANSPORTADORA || '',
-        destino: cotacao.destino || cotacao.DESTINO || '',
-        numeroCotacao: cotacao.numeroCotacao || cotacao.NUMEROCOTACAO || '',
-        valorFrete: cotacao.valorFrete || cotacao.VALORFRETE || cotacao.valor || cotacao.VALOR || 0,
-        previsaoEntrega: cotacao.previsaoEntrega || cotacao.PREVISAOENTREGA || cotacao.previsao || cotacao.PREVISAO || '',
-        canalComunicacao: cotacao.canalComunicacao || cotacao.CANALCOMUNICACAO || '',
-        codigoColeta: cotacao.codigoColeta || cotacao.CODIGOCOLETA || '',
-        responsavelTransportadora: cotacao.responsavelTransportadora || cotacao.RESPONSAVELTRANSPORTADORA || '',
-        dataCotacao: cotacao.dataCotacao || cotacao.DATACOTACAO || cotacao.data || cotacao.DATA || '',
-        observacoes: cotacao.observacoes || cotacao.OBSERVACOES || '',
-        negocioFechado: cotacao.negocioFechado || cotacao.NEGOCIOFECHADO || cotacao.status === 'fechado' || cotacao.STATUS === 'FECHADO' || false
-    };
-}
-
-// ============================================
-// CARREGAMENTO DE DADOS
-// ============================================
-async function loadCotacoes() {
-    if (!isOnline) return;
-
-    try {
-        const response = await fetch(`${API_URL}/cotacoes`, {
-            method: 'GET',
-            headers: { 
-                'X-Session-Token': sessionToken,
-                'Accept': 'application/json'
-            },
-            mode: 'cors'
-        });
-
-        if (response.status === 401) {
-            sessionStorage.removeItem('cotacoesFreteSession');
-            mostrarTelaAcessoNegado('Sua sessão expirou');
-            return;
-        }
-
-        if (!response.ok) return;
-
-        const data = await response.json();
-        cotacoes = data.map(mapearCotacao);
-        
-        const newHash = JSON.stringify(cotacoes.map(c => c.id));
-        if (newHash !== lastDataHash) {
-            lastDataHash = newHash;
-            console.log(`${cotacoes.length} cotações carregadas`);
-            updateAllFilters();
-            filterCotacoes();
-        }
-    } catch (error) {
-        console.error('Erro ao carregar:', error);
     }
 }
 
@@ -261,83 +134,210 @@ function startPolling() {
     }, 10000);
 }
 
-// ============================================
-// TOGGLE NEGÓCIO FECHADO
-// ============================================
-window.toggleNegocioFechado = async function(id) {
-    const idStr = String(id);
-    const cotacao = cotacoes.find(c => String(c.id) === idStr);
-    if (!cotacao) return;
+async function loadCotacoes() {
+    if (!isOnline && !DEVELOPMENT_MODE) return;
 
-    const novoStatus = !cotacao.negocioFechado;
-    cotacao.negocioFechado = novoStatus;
-    filterCotacoes();
-    
-    showMessage(`Negócio marcado como ${novoStatus ? 'aprovado' : 'reprovado'}!`, 'success');
-
-    if (isOnline) {
-        try {
-            const response = await fetch(`${API_URL}/cotacoes/${idStr}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Session-Token': sessionToken,
-                    'Accept': 'application/json'
-                },
-                body: JSON.stringify(cotacao),
-                mode: 'cors'
-            });
-
-            if (!response.ok) throw new Error('Erro ao atualizar');
-
-            const savedData = await response.json();
-            const index = cotacoes.findIndex(c => String(c.id) === idStr);
-            if (index !== -1) cotacoes[index] = mapearCotacao(savedData);
-        } catch (error) {
-            cotacao.negocioFechado = !novoStatus;
-            filterCotacoes();
-            showMessage('Erro ao atualizar status', 'error');
-        }
-    }
-};
-
-// ============================================
-// FORMULÁRIO - CORRIGIDO
-// ============================================
-window.toggleForm = function() {
-    showFormModal(null);
-};
-
-function showFormModal(editingId = null) {
-    const isEditing = editingId !== null;
-    let cotacao = null;
-    
-    if (isEditing) {
-        const idStr = String(editingId);
-        cotacao = cotacoes.find(c => String(c.id) === idStr);
+    try {
+        const headers = {
+            'Accept': 'application/json'
+        };
         
-        if (!cotacao) {
-            showMessage('Cotação não encontrada!', 'error');
+        if (!DEVELOPMENT_MODE && sessionToken) {
+            headers['X-Session-Token'] = sessionToken;
+        }
+
+        const response = await fetch(`${API_URL}/cotacoes`, {
+            method: 'GET',
+            headers: headers,
+            mode: 'cors'
+        });
+
+        if (!DEVELOPMENT_MODE && response.status === 401) {
+            sessionStorage.removeItem('cotacoesFreteSession');
+            mostrarTelaAcessoNegado('Sua sessão expirou');
             return;
         }
-    }
 
+        if (!response.ok) {
+            console.error('❌ Erro ao carregar cotações:', response.status);
+            return;
+        }
+
+        const data = await response.json();
+        cotacoes = data.map(c => ({
+            ...c,
+            negocioFechado: c.negocioFechado || c.status === 'fechado' || false
+        }));
+        
+        const newHash = JSON.stringify(cotacoes.map(c => c.id));
+        if (newHash !== lastDataHash) {
+            lastDataHash = newHash;
+            updateDisplay();
+        }
+    } catch (error) {
+        console.error('❌ Erro ao carregar:', error);
+    }
+}
+
+function changeMonth(direction) {
+    currentMonth.setMonth(currentMonth.getMonth() + direction);
+    updateDisplay();
+}
+
+function updateMonthDisplay() {
+    const months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 
+                    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+    const monthName = months[currentMonth.getMonth()];
+    const year = currentMonth.getFullYear();
+    document.getElementById('currentMonth').textContent = `${monthName} ${year}`;
+}
+
+function switchTab(tabId) {
+    const tabIndex = tabs.indexOf(tabId);
+    if (tabIndex !== -1) {
+        currentTab = tabIndex;
+        showTab(currentTab);
+        updateNavigationButtons();
+    }
+}
+
+function showTab(index) {
+    const tabButtons = document.querySelectorAll('#formModal .tab-btn');
+    const tabContents = document.querySelectorAll('#formModal .tab-content');
+    
+    tabButtons.forEach(btn => btn.classList.remove('active'));
+    tabContents.forEach(content => content.classList.remove('active'));
+    
+    if (tabButtons[index]) tabButtons[index].classList.add('active');
+    if (tabContents[index]) tabContents[index].classList.add('active');
+}
+
+function updateNavigationButtons() {
+    const btnPrevious = document.getElementById('btnPrevious');
+    const btnNext = document.getElementById('btnNext');
+    const btnSave = document.getElementById('btnSave');
+    
+    if (!btnPrevious || !btnNext || !btnSave) return;
+    
+    if (currentTab > 0) {
+        btnPrevious.style.display = 'inline-flex';
+    } else {
+        btnPrevious.style.display = 'none';
+    }
+    
+    if (currentTab < tabs.length - 1) {
+        btnNext.style.display = 'inline-flex';
+        btnSave.style.display = 'none';
+    } else {
+        btnNext.style.display = 'none';
+        btnSave.style.display = 'inline-flex';
+    }
+}
+
+function nextTab() {
+    if (currentTab < tabs.length - 1) {
+        currentTab++;
+        showTab(currentTab);
+        updateNavigationButtons();
+    }
+}
+
+function previousTab() {
+    if (currentTab > 0) {
+        currentTab--;
+        showTab(currentTab);
+        updateNavigationButtons();
+    }
+}
+
+function switchInfoTab(tabId) {
+    const infoTabs = ['info-tab-geral', 'info-tab-transportadora', 'info-tab-detalhes'];
+    const currentIndex = infoTabs.indexOf(tabId);
+    
+    if (currentIndex !== -1) {
+        currentInfoTab = currentIndex;
+    }
+    
+    document.querySelectorAll('#infoModal .tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    document.querySelectorAll('#infoModal .tab-content').forEach(content => {
+        content.classList.remove('active');
+    });
+    
+    const clickedBtn = event?.target?.closest('.tab-btn');
+    if (clickedBtn) {
+        clickedBtn.classList.add('active');
+    } else {
+        document.querySelectorAll('#infoModal .tab-btn')[currentIndex]?.classList.add('active');
+    }
+    document.getElementById(tabId).classList.add('active');
+    
+    updateInfoNavigationButtons();
+}
+
+function updateInfoNavigationButtons() {
+    const btnInfoPrevious = document.getElementById('btnInfoPrevious');
+    const btnInfoNext = document.getElementById('btnInfoNext');
+    const btnInfoClose = document.getElementById('btnInfoClose');
+    
+    if (!btnInfoPrevious || !btnInfoNext || !btnInfoClose) return;
+    
+    const totalTabs = 3;
+    
+    if (currentInfoTab > 0) {
+        btnInfoPrevious.style.display = 'inline-flex';
+    } else {
+        btnInfoPrevious.style.display = 'none';
+    }
+    
+    if (currentInfoTab < totalTabs - 1) {
+        btnInfoNext.style.display = 'inline-flex';
+    } else {
+        btnInfoNext.style.display = 'none';
+    }
+    
+    btnInfoClose.style.display = 'inline-flex';
+}
+
+function nextInfoTab() {
+    const infoTabs = ['info-tab-geral', 'info-tab-transportadora', 'info-tab-detalhes'];
+    if (currentInfoTab < infoTabs.length - 1) {
+        currentInfoTab++;
+        switchInfoTab(infoTabs[currentInfoTab]);
+    }
+}
+
+function previousInfoTab() {
+    const infoTabs = ['info-tab-geral', 'info-tab-transportadora', 'info-tab-detalhes'];
+    if (currentInfoTab > 0) {
+        currentInfoTab--;
+        switchInfoTab(infoTabs[currentInfoTab]);
+    }
+}
+
+function openFormModal() {
+    editingId = null;
+    currentTab = 0;
+    
+    const today = new Date().toISOString().split('T')[0];
+    
     const modalHTML = `
-        <div class="modal-overlay" id="formModal">
-            <div class="modal-content">
+        <div class="modal-overlay" id="formModal" style="display: flex;">
+            <div class="modal-content" style="max-width: 1200px;">
                 <div class="modal-header">
-                    <h3 class="modal-title">${isEditing ? 'Editar Cotação' : 'Nova Cotação'}</h3>
+                    <h3 class="modal-title">Nova Cotação de Frete</h3>
                 </div>
                 
                 <div class="tabs-container">
                     <div class="tabs-nav">
-                        <button class="tab-btn active" onclick="switchFormTab(0)">Geral</button>
-                        <button class="tab-btn" onclick="switchFormTab(1)">Transportadora</button>
-                        <button class="tab-btn" onclick="switchFormTab(2)">Detalhes</button>
+                        <button class="tab-btn active" onclick="switchTab('tab-geral')">Geral</button>
+                        <button class="tab-btn" onclick="switchTab('tab-transportadora')">Transportadora</button>
+                        <button class="tab-btn" onclick="switchTab('tab-detalhes')">Detalhes</button>
                     </div>
 
                     <form id="cotacaoForm" onsubmit="handleSubmit(event)">
-                        <input type="hidden" id="editId" value="${editingId || ''}">
+                        <input type="hidden" id="editId" value="">
                         
                         <div class="tab-content active" id="tab-geral">
                             <div class="form-grid">
@@ -345,24 +345,24 @@ function showFormModal(editingId = null) {
                                     <label for="responsavel">Responsável pela Cotação *</label>
                                     <select id="responsavel" required>
                                         <option value="">Selecione...</option>
-                                        <option value="ROBERTO" ${cotacao?.responsavel === 'ROBERTO' ? 'selected' : ''}>ROBERTO</option>
-                                        <option value="ISAQUE" ${cotacao?.responsavel === 'ISAQUE' ? 'selected' : ''}>ISAQUE</option>
-                                        <option value="MIGUEL" ${cotacao?.responsavel === 'MIGUEL' ? 'selected' : ''}>MIGUEL</option>
-                                        <option value="GUSTAVO" ${cotacao?.responsavel === 'GUSTAVO' ? 'selected' : ''}>GUSTAVO</option>
-                                        <option value="LUIZ" ${cotacao?.responsavel === 'LUIZ' ? 'selected' : ''}>LUIZ</option>
+                                        <option value="ROBERTO">ROBERTO</option>
+                                        <option value="ISAQUE">ISAQUE</option>
+                                        <option value="MIGUEL">MIGUEL</option>
+                                        <option value="GUSTAVO">GUSTAVO</option>
+                                        <option value="LUIZ">LUIZ</option>
                                     </select>
                                 </div>
                                 <div class="form-group">
                                     <label for="documento">Documento *</label>
-                                    <input type="text" id="documento" value="${cotacao?.documento || ''}" required>
+                                    <input type="text" id="documento" required>
                                 </div>
                                 <div class="form-group">
                                     <label for="vendedor">Vendedor</label>
                                     <select id="vendedor">
                                         <option value="">Selecione...</option>
-                                        <option value="ROBERTO" ${cotacao?.vendedor === 'ROBERTO' ? 'selected' : ''}>ROBERTO</option>
-                                        <option value="ISAQUE" ${cotacao?.vendedor === 'ISAQUE' ? 'selected' : ''}>ISAQUE</option>
-                                        <option value="MIGUEL" ${cotacao?.vendedor === 'MIGUEL' ? 'selected' : ''}>MIGUEL</option>
+                                        <option value="ROBERTO">ROBERTO</option>
+                                        <option value="ISAQUE">ISAQUE</option>
+                                        <option value="MIGUEL">MIGUEL</option>
                                     </select>
                                 </div>
                             </div>
@@ -371,46 +371,46 @@ function showFormModal(editingId = null) {
                         <div class="tab-content" id="tab-transportadora">
                             <div class="form-grid">
                                 <div class="form-group">
-                                     <label for="transportadora">Transportadora</label>
+                                    <label for="transportadora">Transportadora</label>
                                     <select id="transportadora">
                                         <option value="">Selecione...</option>
-                                        <option value="TNT MERCÚRIO" ${cotacao?.transportadora === 'TNT MERCÚRIO' ? 'selected' : ''}>TNT MERCÚRIO</option>
-                                        <option value="JAMEF" ${cotacao?.transportadora === 'JAMEF' ? 'selected' : ''}>JAMEF</option>
-                                        <option value="BRASPRESS" ${cotacao?.transportadora === 'BRASPRESS' ? 'selected' : ''}>BRASPRESS</option>
-                                        <option value="GENEROSO" ${cotacao?.transportadora === 'GENEROSO' ? 'selected' : ''}>GENEROSO</option>
-                                        <option value="CONTINENTAL" ${cotacao?.transportadora === 'CONTINENTAL' ? 'selected' : ''}>CONTINENTAL</option>
-                                        <option value="JEOLOG" ${cotacao?.transportadora === 'JEOLOG' ? 'selected' : ''}>JEOLOG</option>
-                                        <option value="TG TRANSPORTES" ${cotacao?.transportadora === 'TG TRANSPORTES' ? 'selected' : ''}>TG TRANSPORTES</option>
-                                        <option value="CORREIOS" ${cotacao?.transportadora === 'CORREIOS' ? 'selected' : ''}>CORREIOS</option>
+                                        <option value="TNT MERCÚRIO">TNT MERCÚRIO</option>
+                                        <option value="JAMEF">JAMEF</option>
+                                        <option value="BRASPRESS">BRASPRESS</option>
+                                        <option value="GENEROSO">GENEROSO</option>
+                                        <option value="CONTINENTAL">CONTINENTAL</option>
+                                        <option value="JEOLOG">JEOLOG</option>
+                                        <option value="TG TRANSPORTES">TG TRANSPORTES</option>
+                                        <option value="CORREIOS">CORREIOS</option>
                                     </select>
                                 </div>
                                 <div class="form-group">
                                     <label for="destino">Cidade-UF *</label>
-                                    <input type="text" id="destino" value="${cotacao?.destino || ''}" required>
+                                    <input type="text" id="destino" required>
                                 </div>
                                 <div class="form-group">
                                     <label for="numeroCotacao">Número da Cotação</label>
-                                    <input type="text" id="numeroCotacao" value="${cotacao?.numeroCotacao || ''}">
+                                    <input type="text" id="numeroCotacao">
                                 </div>
                                 <div class="form-group">
                                     <label for="valorFrete">Valor do Frete (R$) *</label>
-                                    <input type="number" id="valorFrete" step="0.01" min="0" value="${cotacao?.valorFrete || ''}" required>
+                                    <input type="number" id="valorFrete" step="0.01" min="0" required>
                                 </div>
                                 <div class="form-group">
                                     <label for="previsaoEntrega">Previsão de Entrega</label>
-                                    <input type="date" id="previsaoEntrega" value="${cotacao?.previsaoEntrega || ''}">
+                                    <input type="date" id="previsaoEntrega">
                                 </div>
                                 <div class="form-group">
                                     <label for="canalComunicacao">Canal de Comunicação</label>
-                                    <input type="text" id="canalComunicacao" value="${cotacao?.canalComunicacao || ''}" placeholder="Ex: WhatsApp, E-mail">
+                                    <input type="text" id="canalComunicacao" placeholder="Ex: WhatsApp, E-mail">
                                 </div>
                                 <div class="form-group">
                                     <label for="codigoColeta">Código de Coleta</label>
-                                    <input type="text" id="codigoColeta" value="${cotacao?.codigoColeta || ''}">
+                                    <input type="text" id="codigoColeta">
                                 </div>
                                 <div class="form-group">
                                     <label for="responsavelTransportadora">Responsável da Transportadora</label>
-                                    <input type="text" id="responsavelTransportadora" value="${cotacao?.responsavelTransportadora || ''}">
+                                    <input type="text" id="responsavelTransportadora">
                                 </div>
                             </div>
                         </div>
@@ -419,18 +419,20 @@ function showFormModal(editingId = null) {
                             <div class="form-grid">
                                 <div class="form-group">
                                     <label for="dataCotacao">Data da Cotação *</label>
-                                    <input type="date" id="dataCotacao" value="${cotacao?.dataCotacao || new Date().toISOString().split('T')[0]}" required>
+                                    <input type="date" id="dataCotacao" value="${today}" required>
                                 </div>
                                 <div class="form-group" style="grid-column: 1 / -1;">
                                     <label for="observacoes">Observações</label>
-                                    <textarea id="observacoes" rows="4">${cotacao?.observacoes || ''}</textarea>
+                                    <textarea id="observacoes" rows="4"></textarea>
                                 </div>
                             </div>
                         </div>
 
                         <div class="modal-actions">
-                            <button type="submit" class="save">${isEditing ? 'Atualizar' : 'Salvar'}</button>
-                            <button type="button" class="secondary" onclick="closeFormModal()">Cancelar</button>
+                            <button type="button" id="btnPrevious" onclick="previousTab()" class="secondary" style="display: none;">Anterior</button>
+                            <button type="button" id="btnNext" onclick="nextTab()" class="secondary">Próximo</button>
+                            <button type="submit" id="btnSave" class="save" style="display: none;">Salvar Cotação</button>
+                            <button type="button" onclick="closeFormModal(true)" class="secondary">Cancelar</button>
                         </div>
                     </form>
                 </div>
@@ -440,466 +442,586 @@ function showFormModal(editingId = null) {
 
     document.body.insertAdjacentHTML('beforeend', modalHTML);
     
-    const camposMaiusculas = ['documento', 'destino', 'numeroCotacao', 'canalComunicacao', 
-                               'codigoColeta', 'responsavelTransportadora', 'observacoes'];
-
-    camposMaiusculas.forEach(campoId => {
-        const campo = document.getElementById(campoId);
-        if (campo) {
-            campo.addEventListener('input', (e) => {
-                const start = e.target.selectionStart;
-                e.target.value = e.target.value.toUpperCase();
-                e.target.setSelectionRange(start, start);
-            });
-        }
-    });
-    
-    setTimeout(() => document.getElementById('responsavel')?.focus(), 100);
+    setTimeout(() => {
+        setupUpperCaseInputs();
+        updateNavigationButtons();
+        document.getElementById('responsavel')?.focus();
+    }, 100);
 }
 
-function closeFormModal() {
+function closeFormModal(showCancelMessage = false) {
     const modal = document.getElementById('formModal');
     if (modal) {
+        const editId = document.getElementById('editId')?.value;
+        const isEditing = editId && editId !== '';
+        
+        if (showCancelMessage) {
+            showToast(isEditing ? 'Atualização cancelada' : 'Registro cancelado', 'error');
+        }
+        
         modal.style.animation = 'fadeOut 0.2s ease forwards';
         setTimeout(() => modal.remove(), 200);
     }
 }
 
-// ============================================
-// SISTEMA DE ABAS - CORRIGIDO
-// ============================================
-window.switchFormTab = function(index) {
-    const tabButtons = document.querySelectorAll('#formModal .tab-btn');
-    const tabContents = document.querySelectorAll('#formModal .tab-content');
-    
-    tabButtons.forEach((btn, i) => {
-        btn.classList.toggle('active', i === index);
-    });
-    
-    tabContents.forEach((content, i) => {
-        content.classList.toggle('active', i === index);
-    });
-};
+// Continuação do script.js
 
-// ============================================
-// SUBMIT - CORRIGIDO
-// ============================================
 async function handleSubmit(event) {
-    if (event) event.preventDefault();
-
+    event.preventDefault();
+    
     const formData = {
-        responsavel: document.getElementById('responsavel').value.trim(),
-        documento: document.getElementById('documento').value.trim(),
-        vendedor: document.getElementById('vendedor').value.trim(),
-        transportadora: document.getElementById('transportadora').value.trim(),
-        destino: document.getElementById('destino').value.trim(),
-        numeroCotacao: document.getElementById('numeroCotacao').value.trim(),
-        valorFrete: parseFloat(document.getElementById('valorFrete').value),
-        previsaoEntrega: document.getElementById('previsaoEntrega').value.trim(),
-        canalComunicacao: document.getElementById('canalComunicacao').value.trim(),
-        codigoColeta: document.getElementById('codigoColeta').value.trim(),
-        responsavelTransportadora: document.getElementById('responsavelTransportadora').value.trim(),
+        responsavel: document.getElementById('responsavel').value,
+        documento: toUpperCase(document.getElementById('documento').value),
+        vendedor: document.getElementById('vendedor').value,
+        transportadora: document.getElementById('transportadora').value,
+        destino: toUpperCase(document.getElementById('destino').value),
+        numeroCotacao: toUpperCase(document.getElementById('numeroCotacao').value),
+        valorFrete: parseFloat(document.getElementById('valorFrete').value) || 0,
+        previsaoEntrega: document.getElementById('previsaoEntrega').value,
+        canalComunicacao: toUpperCase(document.getElementById('canalComunicacao').value),
+        codigoColeta: toUpperCase(document.getElementById('codigoColeta').value),
+        responsavelTransportadora: toUpperCase(document.getElementById('responsavelTransportadora').value),
         dataCotacao: document.getElementById('dataCotacao').value,
-        observacoes: document.getElementById('observacoes').value.trim(),
+        observacoes: toUpperCase(document.getElementById('observacoes').value),
         negocioFechado: false
     };
-
-    const editId = document.getElementById('editId').value;
-
-    if (editId) {
-        const cotacaoExistente = cotacoes.find(c => String(c.id) === String(editId));
-        if (cotacaoExistente) {
-            formData.negocioFechado = cotacaoExistente.negocioFechado;
-            formData.timestamp = cotacaoExistente.timestamp;
-        }
-    }
-
-    if (!isOnline) {
-        showMessage('Sistema offline. Dados não foram salvos.', 'error');
+    
+    if (!isOnline && !DEVELOPMENT_MODE) {
+        showToast('Sistema offline. Dados não foram salvos.', 'error');
         closeFormModal();
         return;
     }
 
     try {
-        const url = editId ? `${API_URL}/cotacoes/${editId}` : `${API_URL}/cotacoes`;
-        const method = editId ? 'PUT' : 'POST';
+        const url = editingId ? `${API_URL}/cotacoes/${editingId}` : `${API_URL}/cotacoes`;
+        const method = editingId ? 'PUT' : 'POST';
+
+        const headers = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        };
+        
+        if (!DEVELOPMENT_MODE && sessionToken) {
+            headers['X-Session-Token'] = sessionToken;
+        }
 
         const response = await fetch(url, {
             method,
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Session-Token': sessionToken,
-                'Accept': 'application/json'
-            },
+            headers: headers,
             body: JSON.stringify(formData),
             mode: 'cors'
         });
 
-        if (response.status === 401) {
+        if (!DEVELOPMENT_MODE && response.status === 401) {
             sessionStorage.removeItem('cotacoesFreteSession');
             mostrarTelaAcessoNegado('Sua sessão expirou');
             return;
         }
 
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.details || 'Erro ao salvar');
+            let errorMessage = 'Erro ao salvar';
+            try {
+                const errorData = await response.json();
+                errorMessage = errorData.error || errorData.message || errorMessage;
+            } catch (e) {
+                errorMessage = `Erro ${response.status}: ${response.statusText}`;
+            }
+            throw new Error(errorMessage);
         }
 
         const savedData = await response.json();
-        const mappedData = mapearCotacao(savedData);
 
-        if (editId) {
-            const index = cotacoes.findIndex(c => String(c.id) === String(editId));
-            if (index !== -1) cotacoes[index] = mappedData;
-            showMessage('Cotação atualizada!', 'success');
+        if (editingId) {
+            const index = cotacoes.findIndex(c => String(c.id) === String(editingId));
+            if (index !== -1) cotacoes[index] = savedData;
+            showToast('Cotação atualizada com sucesso!', 'success');
         } else {
-            cotacoes.push(mappedData);
-            showMessage('Cotação criada!', 'success');
+            cotacoes.push(savedData);
+            showToast('Cotação criada com sucesso!', 'success');
         }
 
         lastDataHash = JSON.stringify(cotacoes.map(c => c.id));
-        updateAllFilters();
-        filterCotacoes();
+        updateDisplay();
         closeFormModal();
-
     } catch (error) {
-        console.error('Erro:', error);
-        showMessage(`Erro: ${error.message}`, 'error');
-        closeFormModal();
+        console.error('Erro completo:', error);
+        showToast(`Erro: ${error.message}`, 'error');
     }
 }
 
-// ============================================
-// EDIÇÃO
-// ============================================
-window.editCotacao = function(id) {
-    const idStr = String(id);
-    const cotacao = cotacoes.find(c => String(c.id) === idStr);
-    
+async function editCotacao(id) {
+    const cotacao = cotacoes.find(c => String(c.id) === String(id));
     if (!cotacao) {
-        showMessage('Cotação não encontrada!', 'error');
+        showToast('Cotação não encontrada!', 'error');
         return;
     }
     
-    showFormModal(idStr);
-};
-
-// ============================================
-// EXCLUSÃO
-// ============================================
-window.deleteCotacao = async function(id) {
-    const confirmed = await showConfirm(
-        'Tem certeza que deseja excluir esta cotação?',
-        {
-            title: 'Excluir Cotação',
-            confirmText: 'Excluir',
-            cancelText: 'Cancelar',
-            type: 'warning'
-        }
-    );
-
-    if (!confirmed) return;
-
-    const idStr = String(id);
-    const deletedCotacao = cotacoes.find(c => String(c.id) === idStr);
-    cotacoes = cotacoes.filter(c => String(c.id) !== idStr);
-    updateAllFilters();
-    filterCotacoes();
-    showMessage('Cotação excluída!', 'success');
-
-    if (isOnline) {
-        try {
-            const response = await fetch(`${API_URL}/cotacoes/${idStr}`, {
-                method: 'DELETE',
-                headers: {
-                    'X-Session-Token': sessionToken,
-                    'Accept': 'application/json'
-                },
-                mode: 'cors'
-            });
-
-            if (!response.ok) throw new Error('Erro ao deletar');
-        } catch (error) {
-            if (deletedCotacao) {
-                cotacoes.push(deletedCotacao);
-                updateAllFilters();
-                filterCotacoes();
-                showMessage('Erro ao excluir', 'error');
-            }
-        }
-    }
-};
-
-// ============================================
-// VISUALIZAÇÃO
-// ============================================
-window.viewCotacao = function(id) {
-    const idStr = String(id);
-    const cotacao = cotacoes.find(c => String(c.id) === idStr);
+    editingId = id;
+    currentTab = 0;
     
-    if (!cotacao) {
-        showMessage('Cotação não encontrada!', 'error');
-        return;
-    }
-
     const modalHTML = `
-        <div class="modal-overlay" id="viewModal">
-            <div class="modal-content">
+        <div class="modal-overlay" id="formModal" style="display: flex;">
+            <div class="modal-content" style="max-width: 1200px;">
                 <div class="modal-header">
-                    <h3 class="modal-title">Detalhes da Cotação</h3>
+                    <h3 class="modal-title">Editar Cotação de Frete</h3>
                 </div>
                 
                 <div class="tabs-container">
                     <div class="tabs-nav">
-                        <button class="tab-btn active" onclick="switchViewTab(0)">Geral</button>
-                        <button class="tab-btn" onclick="switchViewTab(1)">Transportadora</button>
-                        <button class="tab-btn" onclick="switchViewTab(2)">Detalhes</button>
+                        <button class="tab-btn active" onclick="switchTab('tab-geral')">Geral</button>
+                        <button class="tab-btn" onclick="switchTab('tab-transportadora')">Transportadora</button>
+                        <button class="tab-btn" onclick="switchTab('tab-detalhes')">Detalhes</button>
                     </div>
 
-                    <div class="tab-content active" id="view-tab-geral">
-                        <div class="info-section">
-                            <h4>Informações Gerais</h4>
-                            <p><strong>Responsável:</strong> ${cotacao.responsavel}</p>
-                            <p><strong>Documento:</strong> ${cotacao.documento}</p>
-                            ${cotacao.vendedor ? `<p><strong>Vendedor:</strong> ${cotacao.vendedor}</p>` : ''}
-                            <p><strong>Status:</strong> <span class="badge ${cotacao.negocioFechado ? 'fechada' : 'aberta'}">${cotacao.negocioFechado ? 'APROVADA' : 'REPROVADA'}</span></p>
+                    <form id="cotacaoForm" onsubmit="handleSubmit(event)">
+                        <input type="hidden" id="editId" value="${cotacao.id}">
+                        
+                        <div class="tab-content active" id="tab-geral">
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="responsavel">Responsável pela Cotação *</label>
+                                    <select id="responsavel" required>
+                                        <option value="">Selecione...</option>
+                                        <option value="ROBERTO" ${cotacao.responsavel === 'ROBERTO' ? 'selected' : ''}>ROBERTO</option>
+                                        <option value="ISAQUE" ${cotacao.responsavel === 'ISAQUE' ? 'selected' : ''}>ISAQUE</option>
+                                        <option value="MIGUEL" ${cotacao.responsavel === 'MIGUEL' ? 'selected' : ''}>MIGUEL</option>
+                                        <option value="GUSTAVO" ${cotacao.responsavel === 'GUSTAVO' ? 'selected' : ''}>GUSTAVO</option>
+                                        <option value="LUIZ" ${cotacao.responsavel === 'LUIZ' ? 'selected' : ''}>LUIZ</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="documento">Documento *</label>
+                                    <input type="text" id="documento" value="${toUpperCase(cotacao.documento || '')}" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="vendedor">Vendedor</label>
+                                    <select id="vendedor">
+                                        <option value="">Selecione...</option>
+                                        <option value="ROBERTO" ${cotacao.vendedor === 'ROBERTO' ? 'selected' : ''}>ROBERTO</option>
+                                        <option value="ISAQUE" ${cotacao.vendedor === 'ISAQUE' ? 'selected' : ''}>ISAQUE</option>
+                                        <option value="MIGUEL" ${cotacao.vendedor === 'MIGUEL' ? 'selected' : ''}>MIGUEL</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
-                    </div>
 
-                    <div class="tab-content" id="view-tab-transportadora">
-                        <div class="info-section">
-                            <h4>Dados da Transportadora</h4>
-                            <p><strong>Transportadora:</strong> ${cotacao.transportadora}</p>
-                            <p><strong>Destino:</strong> ${cotacao.destino}</p>
-                            ${cotacao.numeroCotacao ? `<p><strong>Número da Cotação:</strong> ${cotacao.numeroCotacao}</p>` : ''}
-                            <p><strong>Valor do Frete:</strong> R$ ${parseFloat(cotacao.valorFrete).toFixed(2)}</p>
-                            ${cotacao.previsaoEntrega ? `<p><strong>Previsão de Entrega:</strong> ${formatDateDDMMYYYY(cotacao.previsaoEntrega)}</p>` : ''}
-                            ${cotacao.canalComunicacao ? `<p><strong>Canal de Comunicação:</strong> ${cotacao.canalComunicacao}</p>` : ''}
-                            ${cotacao.codigoColeta ? `<p><strong>Código de Coleta:</strong> ${cotacao.codigoColeta}</p>` : ''}
-                            ${cotacao.responsavelTransportadora ? `<p><strong>Responsável:</strong> ${cotacao.responsavelTransportadora}</p>` : ''}
+                        <div class="tab-content" id="tab-transportadora">
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="transportadora">Transportadora</label>
+                                    <select id="transportadora">
+                                        <option value="">Selecione...</option>
+                                        <option value="TNT MERCÚRIO" ${cotacao.transportadora === 'TNT MERCÚRIO' ? 'selected' : ''}>TNT MERCÚRIO</option>
+                                        <option value="JAMEF" ${cotacao.transportadora === 'JAMEF' ? 'selected' : ''}>JAMEF</option>
+                                        <option value="BRASPRESS" ${cotacao.transportadora === 'BRASPRESS' ? 'selected' : ''}>BRASPRESS</option>
+                                        <option value="GENEROSO" ${cotacao.transportadora === 'GENEROSO' ? 'selected' : ''}>GENEROSO</option>
+                                        <option value="CONTINENTAL" ${cotacao.transportadora === 'CONTINENTAL' ? 'selected' : ''}>CONTINENTAL</option>
+                                        <option value="JEOLOG" ${cotacao.transportadora === 'JEOLOG' ? 'selected' : ''}>JEOLOG</option>
+                                        <option value="TG TRANSPORTES" ${cotacao.transportadora === 'TG TRANSPORTES' ? 'selected' : ''}>TG TRANSPORTES</option>
+                                        <option value="CORREIOS" ${cotacao.transportadora === 'CORREIOS' ? 'selected' : ''}>CORREIOS</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="destino">Cidade-UF *</label>
+                                    <input type="text" id="destino" value="${toUpperCase(cotacao.destino || '')}" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="numeroCotacao">Número da Cotação</label>
+                                    <input type="text" id="numeroCotacao" value="${toUpperCase(cotacao.numeroCotacao || '')}">
+                                </div>
+                                <div class="form-group">
+                                    <label for="valorFrete">Valor do Frete (R$) *</label>
+                                    <input type="number" id="valorFrete" step="0.01" min="0" value="${cotacao.valorFrete || 0}" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="previsaoEntrega">Previsão de Entrega</label>
+                                    <input type="date" id="previsaoEntrega" value="${cotacao.previsaoEntrega || ''}">
+                                </div>
+                                <div class="form-group">
+                                    <label for="canalComunicacao">Canal de Comunicação</label>
+                                    <input type="text" id="canalComunicacao" value="${toUpperCase(cotacao.canalComunicacao || '')}" placeholder="Ex: WhatsApp, E-mail">
+                                </div>
+                                <div class="form-group">
+                                    <label for="codigoColeta">Código de Coleta</label>
+                                    <input type="text" id="codigoColeta" value="${toUpperCase(cotacao.codigoColeta || '')}">
+                                </div>
+                                <div class="form-group">
+                                    <label for="responsavelTransportadora">Responsável da Transportadora</label>
+                                    <input type="text" id="responsavelTransportadora" value="${toUpperCase(cotacao.responsavelTransportadora || '')}">
+                                </div>
+                            </div>
                         </div>
-                    </div>
 
-                    <div class="tab-content" id="view-tab-detalhes">
-                        <div class="info-section">
-                            <h4>Detalhes Adicionais</h4>
-                            <p><strong>Data da Cotação:</strong> ${formatDate(cotacao.dataCotacao)}</p>
-                            ${cotacao.observacoes ? `<p><strong>Observações:</strong> ${cotacao.observacoes}</p>` : ''}
+                        <div class="tab-content" id="tab-detalhes">
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="dataCotacao">Data da Cotação *</label>
+                                    <input type="date" id="dataCotacao" value="${cotacao.dataCotacao || ''}" required>
+                                </div>
+                                <div class="form-group" style="grid-column: 1 / -1;">
+                                    <label for="observacoes">Observações</label>
+                                    <textarea id="observacoes" rows="4">${toUpperCase(cotacao.observacoes || '')}</textarea>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                </div>
 
-                <div class="modal-actions">
-                    <button class="secondary" onclick="closeViewModal()">Fechar</button>
+                        <div class="modal-actions">
+                            <button type="button" id="btnPrevious" onclick="previousTab()" class="secondary" style="display: none;">Anterior</button>
+                            <button type="button" id="btnNext" onclick="nextTab()" class="secondary">Próximo</button>
+                            <button type="submit" id="btnSave" class="save" style="display: none;">Atualizar Cotação</button>
+                            <button type="button" onclick="closeFormModal(true)" class="secondary">Cancelar</button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>
     `;
 
     document.body.insertAdjacentHTML('beforeend', modalHTML);
-};
+    
+    setTimeout(() => {
+        setupUpperCaseInputs();
+        updateNavigationButtons();
+    }, 100);
+}
 
-function closeViewModal() {
-    const modal = document.getElementById('viewModal');
-    if (modal) {
-        modal.style.animation = 'fadeOut 0.2s ease forwards';
-        setTimeout(() => modal.remove(), 200);
+async function deleteCotacao(id) {
+    if (!confirm('Tem certeza que deseja excluir esta cotação?')) return;
+
+    if (!isOnline && !DEVELOPMENT_MODE) {
+        showToast('Sistema offline. Não foi possível excluir.', 'error');
+        return;
+    }
+
+    try {
+        const headers = {
+            'Accept': 'application/json'
+        };
+        
+        if (!DEVELOPMENT_MODE && sessionToken) {
+            headers['X-Session-Token'] = sessionToken;
+        }
+
+        const response = await fetch(`${API_URL}/cotacoes/${id}`, {
+            method: 'DELETE',
+            headers: headers,
+            mode: 'cors'
+        });
+
+        if (!DEVELOPMENT_MODE && response.status === 401) {
+            sessionStorage.removeItem('cotacoesFreteSession');
+            mostrarTelaAcessoNegado('Sua sessão expirou');
+            return;
+        }
+
+        if (!response.ok) throw new Error('Erro ao deletar');
+
+        cotacoes = cotacoes.filter(c => String(c.id) !== String(id));
+        lastDataHash = JSON.stringify(cotacoes.map(c => c.id));
+        updateDisplay();
+        showToast('Cotação excluída com sucesso!', 'success');
+    } catch (error) {
+        console.error('Erro ao deletar:', error);
+        showToast('Erro ao excluir cotação', 'error');
     }
 }
 
-window.switchViewTab = function(index) {
-    document.querySelectorAll('#viewModal .tab-btn').forEach((btn, i) => {
-        btn.classList.toggle('active', i === index);
-    });
-    
-    document.querySelectorAll('#viewModal .tab-content').forEach((content, i) => {
-        content.classList.toggle('active', i === index);
-    });
-};
+async function toggleStatus(id) {
+    const cotacao = cotacoes.find(c => String(c.id) === String(id));
+    if (!cotacao) return;
 
-// ============================================
-// FILTROS - ATUALIZAÇÃO DINÂMICA
-// ============================================
-function updateAllFilters() {
-    updateTransportadorasFilter();
-    updateResponsaveisFilter();
+    const novoStatus = !cotacao.negocioFechado;
+    const old = { negocioFechado: cotacao.negocioFechado };
+    cotacao.negocioFechado = novoStatus;
+    updateDisplay();
+    
+    if (novoStatus) {
+        showToast('Cotação marcada como aprovada!', 'success');
+    } else {
+        showToast('Cotação marcada como reprovada!', 'error');
+    }
+
+    if (isOnline || DEVELOPMENT_MODE) {
+        try {
+            const headers = {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            };
+            
+            if (!DEVELOPMENT_MODE && sessionToken) {
+                headers['X-Session-Token'] = sessionToken;
+            }
+
+            const response = await fetch(`${API_URL}/cotacoes/${id}`, {
+                method: 'PATCH',
+                headers: headers,
+                body: JSON.stringify({ negocioFechado: novoStatus }),
+                mode: 'cors'
+            });
+
+            if (!DEVELOPMENT_MODE && response.status === 401) {
+                sessionStorage.removeItem('cotacoesFreteSession');
+                mostrarTelaAcessoNegado('Sua sessão expirou');
+                return;
+            }
+
+            if (!response.ok) throw new Error('Erro ao atualizar');
+
+            const data = await response.json();
+            const index = cotacoes.findIndex(c => String(c.id) === String(id));
+            if (index !== -1) cotacoes[index] = data;
+        } catch (error) {
+            cotacao.negocioFechado = old.negocioFechado;
+            updateDisplay();
+            showToast('Erro ao atualizar status', 'error');
+        }
+    }
 }
 
-function updateTransportadorasFilter() {
-    const transportadoras = new Set();
-    cotacoes.forEach(c => {
-        if (c.transportadora?.trim()) {
-            transportadoras.add(c.transportadora.trim());
+function viewCotacao(id) {
+    const cotacao = cotacoes.find(c => String(c.id) === String(id));
+    if (!cotacao) return;
+    
+    currentInfoTab = 0;
+    
+    document.getElementById('modalDocumento').textContent = toUpperCase(cotacao.documento || 'S/N');
+    
+    document.getElementById('info-tab-geral').innerHTML = `
+        <div class="info-section">
+            <h4>Informações Gerais</h4>
+            <p><strong>Responsável:</strong> ${cotacao.responsavel}</p>
+            <p><strong>Documento:</strong> ${toUpperCase(cotacao.documento || '')}</p>
+            ${cotacao.vendedor ? `<p><strong>Vendedor:</strong> ${cotacao.vendedor}</p>` : ''}
+            <p><strong>Status:</strong> <span class="badge ${cotacao.negocioFechado ? 'aprovada' : 'reprovada'}">${cotacao.negocioFechado ? 'APROVADA' : 'REPROVADA'}</span></p>
+        </div>
+    `;
+    
+    document.getElementById('info-tab-transportadora').innerHTML = `
+        <div class="info-section">
+            <h4>Dados da Transportadora</h4>
+            <p><strong>Transportadora:</strong> ${cotacao.transportadora}</p>
+            <p><strong>Destino:</strong> ${toUpperCase(cotacao.destino || '')}</p>
+            ${cotacao.numeroCotacao ? `<p><strong>Número da Cotação:</strong> ${toUpperCase(cotacao.numeroCotacao)}</p>` : ''}
+            <p><strong>Valor do Frete:</strong> R$ ${parseFloat(cotacao.valorFrete || 0).toFixed(2)}</p>
+            ${cotacao.previsaoEntrega ? `<p><strong>Previsão de Entrega:</strong> ${formatDate(cotacao.previsaoEntrega)}</p>` : ''}
+            ${cotacao.canalComunicacao ? `<p><strong>Canal de Comunicação:</strong> ${toUpperCase(cotacao.canalComunicacao)}</p>` : ''}
+            ${cotacao.codigoColeta ? `<p><strong>Código de Coleta:</strong> ${toUpperCase(cotacao.codigoColeta)}</p>` : ''}
+            ${cotacao.responsavelTransportadora ? `<p><strong>Responsável:</strong> ${toUpperCase(cotacao.responsavelTransportadora)}</p>` : ''}
+        </div>
+    `;
+    
+    document.getElementById('info-tab-detalhes').innerHTML = `
+        <div class="info-section">
+            <h4>Detalhes Adicionais</h4>
+            <p><strong>Data da Cotação:</strong> ${formatDate(cotacao.dataCotacao)}</p>
+            ${cotacao.observacoes ? `<p><strong>Observações:</strong> ${toUpperCase(cotacao.observacoes)}</p>` : ''}
+        </div>
+    `;
+    
+    document.querySelectorAll('#infoModal .tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('#infoModal .tab-content').forEach(content => content.classList.remove('active'));
+    document.querySelectorAll('#infoModal .tab-btn')[0].classList.add('active');
+    document.getElementById('info-tab-geral').classList.add('active');
+    
+    document.getElementById('infoModal').classList.add('show');
+    
+    setTimeout(() => {
+        updateInfoNavigationButtons();
+    }, 100);
+}
+
+function closeInfoModal() {
+    const modal = document.getElementById('infoModal');
+    if (modal) {
+        modal.classList.remove('show');
+    }
+}
+
+function filterCotacoes() {
+    updateTable();
+}
+
+function updateDisplay() {
+    updateMonthDisplay();
+    updateDashboard();
+    updateTable();
+    updateFilters();
+}
+
+function updateDashboard() {
+    const monthCotacoes = getCotacoesForCurrentMonth();
+    const totalAprovadas = monthCotacoes.filter(c => c.negocioFechado).length;
+    const totalReprovadas = monthCotacoes.filter(c => !c.negocioFechado).length;
+    
+    let valorTotalAprovadas = 0;
+    monthCotacoes.filter(c => c.negocioFechado).forEach(cotacao => {
+        valorTotalAprovadas += parseFloat(cotacao.valorFrete || 0);
+    });
+    
+    document.getElementById('totalCotacoes').textContent = monthCotacoes.length;
+    document.getElementById('totalAprovadas').textContent = totalAprovadas;
+    document.getElementById('totalReprovadas').textContent = totalReprovadas;
+    document.getElementById('valorTotal').textContent = formatCurrency(valorTotalAprovadas);
+    
+    const cardReprovadas = document.getElementById('cardReprovadas');
+    if (!cardReprovadas) return;
+    
+    let pulseBadge = cardReprovadas.querySelector('.pulse-badge');
+    
+    if (totalReprovadas > 0) {
+        cardReprovadas.classList.add('has-alert');
+        
+        if (!pulseBadge) {
+            pulseBadge = document.createElement('div');
+            pulseBadge.className = 'pulse-badge';
+            cardReprovadas.appendChild(pulseBadge);
         }
+        pulseBadge.textContent = totalReprovadas;
+        pulseBadge.style.display = 'flex';
+    } else {
+        cardReprovadas.classList.remove('has-alert');
+        if (pulseBadge) {
+            pulseBadge.style.display = 'none';
+        }
+    }
+}
+
+function updateTable() {
+    const container = document.getElementById('cotacoesContainer');
+    let filteredCotacoes = getCotacoesForCurrentMonth();
+    
+    const search = document.getElementById('search').value.toLowerCase();
+    const filterTransportadora = document.getElementById('filterTransportadora').value;
+    const filterResponsavel = document.getElementById('filterResponsavel').value;
+    const filterStatus = document.getElementById('filterStatus').value;
+    
+    if (search) {
+        filteredCotacoes = filteredCotacoes.filter(c => 
+            (c.documento || '').toLowerCase().includes(search) ||
+            (c.transportadora || '').toLowerCase().includes(search) ||
+            (c.destino || '').toLowerCase().includes(search) ||
+            (c.responsavel || '').toLowerCase().includes(search)
+        );
+    }
+    
+    if (filterTransportadora) {
+        filteredCotacoes = filteredCotacoes.filter(c => c.transportadora === filterTransportadora);
+    }
+    
+    if (filterResponsavel) {
+        filteredCotacoes = filteredCotacoes.filter(c => c.responsavel === filterResponsavel);
+    }
+    
+    if (filterStatus) {
+        if (filterStatus === 'reprovada') {
+            filteredCotacoes = filteredCotacoes.filter(c => !c.negocioFechado);
+        } else if (filterStatus === 'aprovada') {
+            filteredCotacoes = filteredCotacoes.filter(c => c.negocioFechado);
+        }
+    }
+    
+    if (filteredCotacoes.length === 0) {
+        container.innerHTML = `
+            <tr>
+                <td colspan="9" style="text-align: center; padding: 2rem;">
+                    Nenhuma cotação encontrada
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    filteredCotacoes.sort((a, b) => new Date(b.dataCotacao) - new Date(a.dataCotacao));
+    
+    container.innerHTML = filteredCotacoes.map(cotacao => `
+        <tr class="${cotacao.negocioFechado ? 'row-aprovada' : ''}">
+            <td style="text-align: center; padding: 8px;">
+                <div class="checkbox-wrapper">
+                    <input 
+                        type="checkbox" 
+                        id="check-${cotacao.id}"
+                        ${cotacao.negocioFechado ? 'checked' : ''}
+                        onchange="toggleStatus('${cotacao.id}')"
+                        class="styled-checkbox"
+                    >
+                    <label for="check-${cotacao.id}" class="checkbox-label-styled"></label>
+                </div>
+            </td>
+            <td style="white-space: nowrap;">${formatDate(cotacao.dataCotacao)}</td>
+            <td><strong>${cotacao.transportadora}</strong></td>
+            <td>${toUpperCase(cotacao.destino || '')}</td>
+            <td>${toUpperCase(cotacao.documento || 'N/A')}</td>
+            <td><strong>R$ ${parseFloat(cotacao.valorFrete || 0).toFixed(2)}</strong></td>
+            <td>${formatDate(cotacao.previsaoEntrega)}</td>
+            <td>
+                <span class="badge ${cotacao.negocioFechado ? 'aprovada' : 'reprovada'}">${cotacao.negocioFechado ? 'APROVADA' : 'REPROVADA'}</span>
+            </td>
+            <td class="actions-cell">
+                <div class="actions">
+                    <button onclick="viewCotacao('${cotacao.id}')" class="action-btn view" title="Ver detalhes">Ver</button>
+                    <button onclick="editCotacao('${cotacao.id}')" class="action-btn edit" title="Editar">Editar</button>
+                    <button onclick="deleteCotacao('${cotacao.id}')" class="action-btn delete" title="Excluir">Excluir</button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function updateFilters() {
+    const transportadoras = new Set();
+    const responsaveis = new Set();
+    
+    cotacoes.forEach(c => {
+        if (c.transportadora?.trim()) transportadoras.add(c.transportadora.trim());
+        if (c.responsavel?.trim()) responsaveis.add(c.responsavel.trim());
     });
 
-    const select = document.getElementById('filterTransportadora');
-    if (select) {
-        const currentValue = select.value;
-        select.innerHTML = '<option value="">Todas</option>';
+    const selectTransportadora = document.getElementById('filterTransportadora');
+    if (selectTransportadora) {
+        const currentValue = selectTransportadora.value;
+        selectTransportadora.innerHTML = '<option value="">Transportadora</option>';
         Array.from(transportadoras).sort().forEach(t => {
             const option = document.createElement('option');
             option.value = t;
             option.textContent = t;
-            select.appendChild(option);
+            selectTransportadora.appendChild(option);
         });
-        select.value = currentValue;
+        selectTransportadora.value = currentValue;
     }
-}
 
-function updateResponsaveisFilter() {
-    const responsaveis = new Set();
-    cotacoes.forEach(c => {
-        if (c.responsavel?.trim()) {
-            responsaveis.add(c.responsavel.trim());
-        }
-    });
-
-    const select = document.getElementById('filterResponsavel');
-    if (select) {
-        const currentValue = select.value;
-        select.innerHTML = '<option value="">Todos</option>';
+    const selectResponsavel = document.getElementById('filterResponsavel');
+    if (selectResponsavel) {
+        const currentValue = selectResponsavel.value;
+        selectResponsavel.innerHTML = '<option value="">Responsável</option>';
         Array.from(responsaveis).sort().forEach(r => {
             const option = document.createElement('option');
             option.value = r;
             option.textContent = r;
-            select.appendChild(option);
+            selectResponsavel.appendChild(option);
         });
-        select.value = currentValue;
+        selectResponsavel.value = currentValue;
     }
 }
 
-// ============================================
-// FILTROS E RENDERIZAÇÃO
-// ============================================
-function filterCotacoes() {
-    const searchTerm = document.getElementById('search')?.value.toLowerCase() || '';
-    const filterTransportadora = document.getElementById('filterTransportadora')?.value || '';
-    const filterResponsavel = document.getElementById('filterResponsavel')?.value || '';
-    const filterStatus = document.getElementById('filterStatus')?.value || '';
-    
-    let filtered = [...cotacoes];
-
-    filtered = filtered.filter(c => {
-        const data = new Date(c.dataCotacao + 'T00:00:00');
-        return data.getMonth() === currentMonth && data.getFullYear() === currentYear;
+function getCotacoesForCurrentMonth() {
+    return cotacoes.filter(cotacao => {
+        const cotacaoDate = new Date(cotacao.dataCotacao + 'T00:00:00');
+        return cotacaoDate.getMonth() === currentMonth.getMonth() &&
+               cotacaoDate.getFullYear() === currentMonth.getFullYear();
     });
-
-    if (filterTransportadora) {
-        filtered = filtered.filter(c => c.transportadora === filterTransportadora);
-    }
-
-    if (filterResponsavel) {
-        filtered = filtered.filter(c => c.responsavel === filterResponsavel);
-    }
-
-    if (filterStatus) {
-        filtered = filtered.filter(c => {
-            if (filterStatus === 'aberto') return !c.negocioFechado;
-            if (filterStatus === 'fechado') return c.negocioFechado;
-            return true;
-        });
-    }
-
-    if (searchTerm) {
-        filtered = filtered.filter(c => 
-            c.transportadora?.toLowerCase().includes(searchTerm) ||
-            c.destino?.toLowerCase().includes(searchTerm) ||
-            c.documento?.toLowerCase().includes(searchTerm) ||
-            c.numeroCotacao?.toLowerCase().includes(searchTerm) ||
-            c.responsavel?.toLowerCase().includes(searchTerm)
-        );
-    }
-
-    filtered.sort((a, b) => new Date(b.dataCotacao) - new Date(a.dataCotacao));
-    renderCotacoes(filtered);
 }
 
-// ============================================
-// RENDERIZAÇÃO
-// ============================================
-function renderCotacoes(cotacoesToRender) {
-    const container = document.getElementById('cotacoesContainer');
-    
-    if (!container) return;
-    
-    if (!cotacoesToRender || cotacoesToRender.length === 0) {
-        container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Nenhuma cotação encontrada para este período</div>';
-        return;
-    }
-
-    const table = `
-        <div style="overflow-x: auto;">
-            <table>
-                <thead>
-                    <tr>
-                        <th style="text-align: center; width: 60px;"> </th>
-                        <th>Data</th>
-                        <th>Transportadora</th>
-                        <th>Destino</th>
-                        <th>Documento</th>
-                        <th>Valor</th>
-                        <th>Previsão</th>
-                        <th>Status</th>
-                        <th style="text-align: center; min-width: 260px;">Ações</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${cotacoesToRender.map(c => `
-                        <tr class="${c.negocioFechado ? 'fechada' : ''}">
-                            <td style="text-align: center;">
-                                <button class="check-btn ${c.negocioFechado ? 'checked' : ''}" 
-                                        onclick="toggleNegocioFechado('${c.id}')" 
-                                        title="${c.negocioFechado ? 'Marcar como reprovada' : 'Marcar como aprovada'}">
-                                        ✓
-                                </button>
-                            </td>
-                            <td>${formatDate(c.dataCotacao)}</td>
-                            <td><strong>${c.transportadora}</strong></td>
-                            <td>${c.destino}</td>
-                            <td>${c.documento || 'N/A'}</td>
-                            <td><strong>R$ ${parseFloat(c.valorFrete).toFixed(2)}</strong></td>
-                            <td>${formatDateDDMMYYYY(c.previsaoEntrega)}</td>
-                            <td>
-                                <span class="badge ${c.negocioFechado ? 'fechada' : 'aberta'}">
-                                    ${c.negocioFechado ? 'APROVADA' : 'REPROVADA'}
-                                </span>
-                            </td>
-                            <td class="actions-cell" style="text-align: center;">
-                                <button onclick="viewCotacao('${c.id}')" class="action-btn view">Ver</button>
-                                <button onclick="editCotacao('${c.id}')" class="action-btn edit">Editar</button>
-                                <button onclick="deleteCotacao('${c.id}')" class="action-btn delete">Excluir</button>
-                            </td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-        </div>
-    `;
-    
-    container.innerHTML = table;
-}
-
-// ============================================
-// UTILIDADES
-// ============================================
 function formatDate(dateString) {
     if (!dateString) return '-';
     const date = new Date(dateString + 'T00:00:00');
     return date.toLocaleDateString('pt-BR');
 }
 
-function formatDateDDMMYYYY(dateString) {
-    if (!dateString) return '-';
-    const date = new Date(dateString + 'T00:00:00');
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const year = date.getFullYear();
-    return `${day}/${month}/${year}`;
+function formatCurrency(value) {
+    return `R$ ${parseFloat(value).toFixed(2).replace('.', ',')}`;
 }
 
-function showMessage(message, type) {
+function showToast(message, type = 'success') {
     const oldMessages = document.querySelectorAll('.floating-message');
     oldMessages.forEach(msg => msg.remove());
     
