@@ -4,82 +4,226 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cotações de Frete</title>
+    <link rel="icon" type="image/png" href="I.R.-COMERCIO-E-MATERIAIS-ELETRICOS-PRETO.png">
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <!-- Splash Screen -->
     <div class="splash-screen" id="splashScreen">
-        <h1 class="splash-title">Cotações de Frete</h1>
+        <div class="loader"></div>
     </div>
 
-    <!-- Conteúdo Principal -->
     <div class="app-content">
         <div class="container">
             <div class="header">
-                <h1>Cotações de Frete</h1>
-                <div id="connectionStatus" class="connection-status offline">
-                    <span class="status-dot"></span>
+                <div class="header-left">
+                    <h1>Cotações de Frete</h1>
+                    <div id="connectionStatus" class="connection-status offline">
+                        <span class="status-dot"></span>
+                    </div>
+                </div>
+                <button onclick="openFormModal()" class="btn-new-order-header">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    Nova Cotação
+                </button>
+            </div>
+
+            <!-- Dashboard Cards -->
+            <div class="dashboard-grid">
+                <div class="stat-card">
+                    <div class="stat-icon stat-icon-default">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="16" y1="13" x2="8" y2="13"></line>
+                            <line x1="16" y1="17" x2="8" y2="17"></line>
+                            <polyline points="10 9 9 9 8 9"></polyline>
+                        </svg>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-value" id="totalCotacoes">0</div>
+                        <div class="stat-label">Total de Cotações</div>
+                    </div>
+                </div>
+                <div class="stat-card stat-card-success">
+                    <div class="stat-icon stat-icon-success">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-value stat-value-success" id="totalAprovadas">0</div>
+                        <div class="stat-label">Aprovadas</div>
+                    </div>
+                </div>
+                <div class="stat-card stat-card-warning" id="cardReprovadas">
+                    <div class="stat-icon stat-icon-warning">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="15" y1="9" x2="9" y2="15"></line>
+                            <line x1="9" y1="9" x2="15" y2="15"></line>
+                        </svg>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-value stat-value-warning" id="totalReprovadas">0</div>
+                        <div class="stat-label">Reprovadas</div>
+                    </div>
+                </div>
+                <div class="stat-card stat-card-info">
+                    <div class="stat-icon stat-icon-info">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="1" x2="12" y2="23"></line>
+                            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                        </svg>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-value stat-value-info" id="valorTotal">R$ 0,00</div>
+                        <div class="stat-label">Total Aprovadas</div>
+                    </div>
                 </div>
             </div>
 
-            <!-- REMOVIDO: Botão fixo no topo -->
-            <!-- <div class="button-wrapper">
-                <button onclick="toggleForm()" class="register">Nova Cotação</button>
-            </div> -->
+            <!-- Search Bar with Filters -->
+            <div class="search-bar-wrapper">
+                <div class="search-bar">
+                    <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                    <input type="text" id="search" placeholder="Pesquisar" oninput="filterCotacoes()">
+                    
+                    <!-- Filters integrated in search bar -->
+                    <div class="search-bar-filters">
+                        <div class="filter-dropdown-inline">
+                            <select id="filterTransportadora" onchange="filterCotacoes()">
+                                <option value="">Transportadora</option>
+                            </select>
+                            <svg class="dropdown-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </div>
+                        <div class="filter-dropdown-inline">
+                            <select id="filterResponsavel" onchange="filterCotacoes()">
+                                <option value="">Responsável</option>
+                            </select>
+                            <svg class="dropdown-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </div>
+                        <div class="filter-dropdown-inline">
+                            <select id="filterStatus" onchange="filterCotacoes()">
+                                <option value="">Todos os Status</option>
+                                <option value="reprovada">Reprovada</option>
+                                <option value="aprovada">Aprovada</option>
+                            </select>
+                            <svg class="dropdown-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </div>
+                        <div class="month-navigation-inline">
+                            <button onclick="changeMonth(-1)" class="month-nav-arrow" title="Mês anterior">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="15 18 9 12 15 6"></polyline>
+                                </svg>
+                            </button>
+                            <div class="month-display-inline">
+                                <span id="currentMonth">Carregando...</span>
+                            </div>
+                            <button onclick="changeMonth(1)" class="month-nav-arrow" title="Próximo mês">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="9 18 15 12 9 6"></polyline>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
 
-            <!-- NAVEGAÇÃO POR MESES -->
-            <div class="card">
-                <div class="month-navigation">
-                    <button onclick="previousMonth()" class="month-nav-btn">Anterior</button>
-                    <h3 id="currentMonthDisplay" class="month-display">Carregando...</h3>
-                    <button onclick="nextMonth()" class="month-nav-btn">Próximo</button>
+                    <button class="calendar-btn" onclick="toggleCalendar()" title="Selecionar mês">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="16" y1="2" x2="16" y2="6"></line>
+                            <line x1="8" y1="2" x2="8" y2="6"></line>
+                            <line x1="3" y1="10" x2="21" y2="10"></line>
+                        </svg>
+                    </button>
                 </div>
             </div>
 
-            <!-- FILTROS -->
-            <div class="card">
-                <div class="filter-section">
-                    <div class="form-group">
-                        <label for="search">Pesquisar:</label>
-                        <input type="text" id="search" placeholder="Documento, transportadora, destino..." oninput="filterCotacoes()">
+            <!-- Calendar Modal -->
+            <div class="calendar-modal" id="calendarModal">
+                <div class="calendar-content">
+                    <div class="calendar-header">
+                        <button onclick="changeCalendarYear(-1)" class="calendar-year-nav">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="15 18 9 12 15 6"></polyline>
+                            </svg>
+                        </button>
+                        <h3 id="calendarYear">2026</h3>
+                        <button onclick="changeCalendarYear(1)" class="calendar-year-nav">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="9 18 15 12 9 6"></polyline>
+                            </svg>
+                        </button>
                     </div>
-                    <div class="form-group">
-                        <label for="filterTransportadora">Filtrar por Transportadora:</label>
-                        <select id="filterTransportadora" onchange="filterCotacoes()">
-                            <option value="">Todas</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="filterResponsavel">Filtrar por Responsável:</label>
-                        <select id="filterResponsavel" onchange="filterCotacoes()">
-                            <option value="">Todos</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="filterStatus">Filtrar por Status:</label>
-                        <select id="filterStatus" onchange="filterCotacoes()">
-                            <option value="">Todos</option>
-                            <option value="aberto">Reprovada</option>
-                            <option value="fechado">Aprovada</option>
-                        </select>
-                    </div>
+                    <div class="calendar-months" id="calendarMonths"></div>
                 </div>
             </div>
 
-            <!-- LISTA DE COTAÇÕES -->
-            <div class="card">
-                <div id="cotacoesContainer"></div>
+            <!-- Table Card -->
+            <div class="card table-card">
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 40px; text-align: center;">
+                                    <span style="font-size: 1.1rem;">✓</span>
+                                </th>
+                                <th>Data</th>
+                                <th>Transportadora</th>
+                                <th>Destino</th>
+                                <th>Documento</th>
+                                <th>Valor</th>
+                                <th>Previsão</th>
+                                <th>Status</th>
+                                <th style="text-align: center;">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cotacoesContainer"></tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- NOVO: Botão Flutuante -->
-    <button onclick="toggleForm()" class="floating-add-btn" title="Nova Cotação">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-        </svg>
-    </button>
+    <!-- MODAL DE VISUALIZAÇÃO -->
+    <div class="modal-overlay" id="infoModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Cotação - <span id="modalDocumento"></span></h3>
+                <button class="close-modal" onclick="closeInfoModal()">✕</button>
+            </div>
+            
+            <div class="tabs-container">
+                <div class="tabs-nav">
+                    <button class="tab-btn active" onclick="switchInfoTab('info-tab-geral')">Geral</button>
+                    <button class="tab-btn" onclick="switchInfoTab('info-tab-transportadora')">Transportadora</button>
+                    <button class="tab-btn" onclick="switchInfoTab('info-tab-detalhes')">Detalhes</button>
+                </div>
+
+                <div class="tab-content active" id="info-tab-geral"></div>
+                <div class="tab-content" id="info-tab-transportadora"></div>
+                <div class="tab-content" id="info-tab-detalhes"></div>
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" id="btnInfoPrevious" onclick="previousInfoTab()" class="secondary" style="display: none;">Anterior</button>
+                <button type="button" id="btnInfoNext" onclick="nextInfoTab()" class="secondary">Próximo</button>
+                <button type="button" id="btnInfoClose" onclick="closeInfoModal()" class="secondary">Fechar</button>
+            </div>
+        </div>
+    </div>
 
     <script>
         setTimeout(() => {
@@ -88,5 +232,6 @@
         }, 3000);
     </script>
     <script src="script.js"></script>
+    <script src="calendar.js"></script>
 </body>
 </html>
