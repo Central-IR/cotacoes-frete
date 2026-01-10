@@ -851,33 +851,9 @@ function updateDisplay() {
 function updateDashboard() {
     const monthCotacoes = getCotacoesForCurrentMonth();
     const totalAprovadas = monthCotacoes.filter(c => c.negocioFechado).length;
-    const totalReprovadas = monthCotacoes.filter(c => !c.negocioFechado).length;
     
     document.getElementById('totalCotacoes').textContent = monthCotacoes.length;
     document.getElementById('totalAprovadas').textContent = totalAprovadas;
-    document.getElementById('totalReprovadas').textContent = totalReprovadas;
-    
-    const cardReprovadas = document.getElementById('cardReprovadas');
-    if (!cardReprovadas) return;
-    
-    let pulseBadge = cardReprovadas.querySelector('.pulse-badge');
-    
-    if (totalReprovadas > 0) {
-        cardReprovadas.classList.add('has-alert');
-        
-        if (!pulseBadge) {
-            pulseBadge = document.createElement('div');
-            pulseBadge.className = 'pulse-badge';
-            cardReprovadas.appendChild(pulseBadge);
-        }
-        pulseBadge.textContent = totalReprovadas;
-        pulseBadge.style.display = 'flex';
-    } else {
-        cardReprovadas.classList.remove('has-alert');
-        if (pulseBadge) {
-            pulseBadge.style.display = 'none';
-        }
-    }
 }
 
 function updateTable() {
