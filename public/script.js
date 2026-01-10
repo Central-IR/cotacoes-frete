@@ -1,4 +1,4 @@
-const DEVELOPMENT_MODE = true;
+const DEVELOPMENT_MODE = false;
 const PORTAL_URL = 'https://ir-comercio-portal-zcan.onrender.com';
 const API_URL = 'https://cotacoes-frete-aikc.onrender.com/api';
 
@@ -853,15 +853,9 @@ function updateDashboard() {
     const totalAprovadas = monthCotacoes.filter(c => c.negocioFechado).length;
     const totalReprovadas = monthCotacoes.filter(c => !c.negocioFechado).length;
     
-    let valorTotalAprovadas = 0;
-    monthCotacoes.filter(c => c.negocioFechado).forEach(cotacao => {
-        valorTotalAprovadas += parseFloat(cotacao.valorFrete || 0);
-    });
-    
     document.getElementById('totalCotacoes').textContent = monthCotacoes.length;
     document.getElementById('totalAprovadas').textContent = totalAprovadas;
     document.getElementById('totalReprovadas').textContent = totalReprovadas;
-    document.getElementById('valorTotal').textContent = formatCurrency(valorTotalAprovadas);
     
     const cardReprovadas = document.getElementById('cardReprovadas');
     if (!cardReprovadas) return;
