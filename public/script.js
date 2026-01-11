@@ -851,9 +851,11 @@ function updateDisplay() {
 function updateDashboard() {
     const monthCotacoes = getCotacoesForCurrentMonth();
     const totalAprovadas = monthCotacoes.filter(c => c.negocioFechado).length;
+    const totalReprovadas = monthCotacoes.filter(c => !c.negocioFechado).length;
     
     document.getElementById('totalCotacoes').textContent = monthCotacoes.length;
     document.getElementById('totalAprovadas').textContent = totalAprovadas;
+    document.getElementById('totalReprovadas').textContent = totalReprovadas;
 }
 
 function updateTable() {
