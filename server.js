@@ -22,22 +22,20 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 console.log('✅ Supabase configurado:', supabaseUrl);
 
 // ==========================================
-// ======== CORS - PERMITE TODOS OS DOMÍNIOS
+// ======== MIDDLEWARES GLOBAIS =============
 // ==========================================
 app.use(cors({
-    origin: '*', // Permite qualquer origem
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'HEAD', 'OPTIONS'],
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Session-Token', 'Accept'],
     credentials: false
 }));
 
-// Adiciona headers CORS manualmente também
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, HEAD, OPTIONS');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Session-Token, Accept');
     
-    // Responde OPTIONS request imediatamente
     if (req.method === 'OPTIONS') {
         return res.sendStatus(200);
     }
@@ -47,27 +45,26 @@ app.use((req, res, next) => {
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Log detalhado de requisições
+// Log de requisições
 app.use((req, res, next) => {
     console.log(`📥 ${new Date().toISOString()} - ${req.method} ${req.path}`);
     next();
 });
 
 // ==========================================
-// ======== MIDDLEWARE DE AUTENTICAÇÃO ======
+// ======== CONFIGURAÇÃO DE ARQUIVOS ========
 // ==========================================
 const PORTAL_URL = process.env.PORTAL_URL || 'https://ir-comercio-portal-zcan.onrender.com';
-
 console.log('🔐 Portal URL configurado:', PORTAL_URL);
 
-async function verificarAutenticacao(req, res, next) {
-    // Rotas públicas que NÃO precisam de autenticação
-    const publicPaths = ['/', '/health', '/app'];
-    if (publicPaths.includes(req.path)) {
-        return next();
-    }
+// Determinar o caminho correto para os arquivos públicos
+const publicPath = path.join(__dirname, 'public');
+console.log('📁 Pasta public:', publicPath);
 
-    // Pegar token da sessão
+// ==========================================
+// ======== MIDDLEWARE DE AUTENTICAÇÃO ======
+// ==========================================
+async function verificarAutenticacao(req, res, next) {
     const sessionToken = req.headers['x-session-token'] || req.query.sessionToken;
 
     console.log('🔑 Token recebido:', sessionToken ? `${sessionToken.substring(0, 20)}...` : 'NENHUM');
@@ -84,7 +81,6 @@ async function verificarAutenticacao(req, res, next) {
     try {
         console.log('🔍 Verificando sessão no portal:', PORTAL_URL);
         
-        // Verificar se a sessão é válida no Portal Central
         const verifyResponse = await fetch(`${PORTAL_URL}/api/verify-session`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -114,7 +110,6 @@ async function verificarAutenticacao(req, res, next) {
             });
         }
 
-        // Adicionar informações do usuário na requisição
         req.user = sessionData.session;
         req.sessionToken = sessionToken;
 
@@ -128,26 +123,6 @@ async function verificarAutenticacao(req, res, next) {
         });
     }
 }
-
-// ==========================================
-// ======== SERVIR ARQUIVOS ESTÁTICOS =======
-// ==========================================
-const publicPath = path.join(__dirname, 'public');
-console.log('📁 Pasta public:', publicPath);
-
-app.use(express.static(publicPath, {
-    index: 'index.html',
-    dotfiles: 'deny',
-    setHeaders: (res, filePath) => {
-        if (filePath.endsWith('.html')) {
-            res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        } else if (filePath.endsWith('.css')) {
-            res.setHeader('Content-Type', 'text/css; charset=utf-8');
-        } else if (filePath.endsWith('.js')) {
-            res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-        }
-    }
-}));
 
 // ==========================================
 // ======== HEALTH CHECK (PÚBLICO) ==========
@@ -295,6 +270,36 @@ app.put('/api/cotacoes/:id', async (req, res) => {
     }
 });
 
+// Atualizar status da cotação (PATCH)
+app.patch('/api/cotacoes/:id', async (req, res) => {
+    try {
+        console.log('🔄 Atualizando status da cotação:', req.params.id);
+        
+        const { data, error } = await supabase
+            .from('cotacoes')
+            .update({
+                ...req.body,
+                updatedAt: new Date().toISOString()
+            })
+            .eq('id', req.params.id)
+            .select()
+            .single();
+
+        if (error) {
+            return res.status(404).json({ error: 'Cotação não encontrada' });
+        }
+        
+        console.log('✅ Status atualizado');
+        res.json(data);
+    } catch (error) {
+        console.error('❌ Erro:', error);
+        res.status(500).json({ 
+            error: 'Erro ao atualizar status', 
+            details: error.message 
+        });
+    }
+});
+
 // Deletar cotação
 app.delete('/api/cotacoes/:id', async (req, res) => {
     try {
@@ -319,14 +324,39 @@ app.delete('/api/cotacoes/:id', async (req, res) => {
 });
 
 // ==========================================
-// ======== ROTA PRINCIPAL (PÚBLICO) ========
+// ======== SERVIR ARQUIVOS ESTÁTICOS =======
 // ==========================================
-app.get('/', (req, res) => {
-    res.sendFile(path.join(publicPath, 'index.html'));
-});
 
-app.get('/app', (req, res) => {
-    res.sendFile(path.join(publicPath, 'index.html'));
+// Middleware para servir arquivos estáticos
+app.use(express.static(publicPath, {
+    index: false, // Não servir automaticamente index.html
+    dotfiles: 'deny',
+    setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.html')) {
+            res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        } else if (filePath.endsWith('.css')) {
+            res.setHeader('Content-Type', 'text/css; charset=utf-8');
+        } else if (filePath.endsWith('.js')) {
+            res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+        }
+    }
+}));
+
+// Rotas para servir o index.html
+app.get(['/', '/app'], (req, res) => {
+    const indexPath = path.join(publicPath, 'index.html');
+    console.log('📄 Servindo index.html de:', indexPath);
+    
+    res.sendFile(indexPath, (err) => {
+        if (err) {
+            console.error('❌ Erro ao servir index.html:', err);
+            res.status(500).json({
+                error: 'Erro ao carregar aplicação',
+                message: 'Não foi possível carregar o arquivo index.html',
+                details: err.message
+            });
+        }
+    });
 });
 
 // ==========================================
@@ -370,14 +400,21 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`🌍 CORS: Liberado para todos`);
     console.log(`🔓 Rotas públicas: /, /health, /app`);
     console.log('🚀 ================================\n');
+    
+    // Verificar se pasta public existe
+    const fs = require('fs');
+    if (!fs.existsSync(publicPath)) {
+        console.error('⚠️ AVISO: Pasta public/ não encontrada!');
+        console.error('📁 Crie a pasta e adicione os arquivos:');
+        console.error('   - public/index.html');
+        console.error('   - public/styles.css');
+        console.error('   - public/script.js');
+    } else {
+        console.log('✅ Pasta public/ encontrada');
+        
+        // Listar arquivos na pasta public
+        const files = fs.readdirSync(publicPath);
+        console.log('📄 Arquivos na pasta public:');
+        files.forEach(file => console.log(`   - ${file}`));
+    }
 });
-
-// Verificar se pasta public existe
-const fs = require('fs');
-if (!fs.existsSync(publicPath)) {
-    console.error('⚠️ AVISO: Pasta public/ não encontrada!');
-    console.error('📁 Crie a pasta e adicione os arquivos:');
-    console.error('   - public/index.html');
-    console.error('   - public/styles.css');
-    console.error('   - public/script.js');
-}
