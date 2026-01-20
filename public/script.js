@@ -618,6 +618,7 @@ async function editCotacao(id) {
                                         <option value="CONTINENTAL" ${cotacao.transportadora === 'CONTINENTAL' ? 'selected' : ''}>CONTINENTAL</option>
                                         <option value="JEOLOG" ${cotacao.transportadora === 'JEOLOG' ? 'selected' : ''}>JEOLOG</option>
                                         <option value="TG TRANSPORTES" ${cotacao.transportadora === 'TG TRANSPORTES' ? 'selected' : ''}>TG TRANSPORTES</option>
+                                        <option value="FAVORITA" ${cotacao.transportadora === 'FAVORITA' ? 'selected' : ''}>FAVORITA</option>
                                         <option value="CORREIOS" ${cotacao.transportadora === 'CORREIOS' ? 'selected' : ''}>CORREIOS</option>
                                     </select>
                                 </div>
