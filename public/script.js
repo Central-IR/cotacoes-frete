@@ -17,6 +17,10 @@ console.log('🚀 Cotações de Frete iniciada');
 console.log('📍 API URL:', API_URL);
 console.log('🔧 Modo desenvolvimento:', DEVELOPMENT_MODE);
 
+// ====================
+// UTILITY FUNCTIONS
+// ====================
+
 function toUpperCase(value) {
     return value ? String(value).toUpperCase() : '';
 }
@@ -33,7 +37,39 @@ function setupUpperCaseInputs() {
     });
 }
 
+function formatDate(dateString) {
+    if (!dateString) return '-';
+    const date = new Date(dateString + 'T00:00:00');
+    return date.toLocaleDateString('pt-BR');
+}
+
+function formatCurrency(value) {
+    return `R$ ${parseFloat(value).toFixed(2).replace('.', ',')}`;
+}
+
+function showToast(message, type = 'success') {
+    const oldMessages = document.querySelectorAll('.floating-message');
+    oldMessages.forEach(msg => msg.remove());
+    
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `floating-message ${type}`;
+    messageDiv.textContent = message;
+    
+    document.body.appendChild(messageDiv);
+    
+    setTimeout(() => {
+        messageDiv.style.animation = 'slideOut 0.3s ease forwards';
+        setTimeout(() => messageDiv.remove(), 300);
+    }, 3000);
+}
+
+// ====================
+// INITIALIZATION
+// ====================
+
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('✅ DOM carregado, iniciando aplicação...');
+    
     if (DEVELOPMENT_MODE) {
         console.log('⚠️ MODO DESENVOLVIMENTO ATIVADO');
         sessionToken = 'dev-mode';
@@ -74,11 +110,16 @@ function mostrarTelaAcessoNegado(mensagem = 'NÃO AUTORIZADO') {
 }
 
 function inicializarApp() {
+    console.log('🔄 Inicializando aplicação...');
     updateDisplay();
     checkServerStatus();
     setInterval(checkServerStatus, 15000);
     startPolling();
 }
+
+// ====================
+// SERVER STATUS
+// ====================
 
 async function checkServerStatus() {
     try {
@@ -134,6 +175,10 @@ function startPolling() {
     }, 10000);
 }
 
+// ====================
+// DATA LOADING
+// ====================
+
 async function loadCotacoes() {
     if (!isOnline && !DEVELOPMENT_MODE) return;
 
@@ -179,6 +224,10 @@ async function loadCotacoes() {
     }
 }
 
+// ====================
+// MONTH NAVIGATION
+// ====================
+
 function changeMonth(direction) {
     currentMonth.setMonth(currentMonth.getMonth() + direction);
     updateDisplay();
@@ -191,6 +240,10 @@ function updateMonthDisplay() {
     const year = currentMonth.getFullYear();
     document.getElementById('currentMonth').textContent = `${monthName} ${year}`;
 }
+
+// ====================
+// TAB NAVIGATION (FORM MODAL)
+// ====================
 
 function switchTab(tabId) {
     const tabIndex = tabs.indexOf(tabId);
@@ -249,6 +302,10 @@ function previousTab() {
         updateNavigationButtons();
     }
 }
+
+// ====================
+// TAB NAVIGATION (INFO MODAL)
+// ====================
 
 function switchInfoTab(tabId) {
     const infoTabs = ['info-tab-geral', 'info-tab-transportadora', 'info-tab-detalhes'];
@@ -316,9 +373,20 @@ function previousInfoTab() {
     }
 }
 
+// ====================
+// FORM MODAL
+// ====================
+
 function openFormModal() {
+    console.log('📝 Abrindo modal de formulário...');
     editingId = null;
     currentTab = 0;
+    
+    // Remove modal existente se houver
+    const existingModal = document.getElementById('formModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
     
     const today = new Date().toISOString().split('T')[0];
     
@@ -442,11 +510,17 @@ function openFormModal() {
 
     document.body.insertAdjacentHTML('beforeend', modalHTML);
     
-    setTimeout(() => {
-        setupUpperCaseInputs();
-        updateNavigationButtons();
-        document.getElementById('responsavel')?.focus();
-    }, 100);
+    // Usar requestAnimationFrame para garantir que o DOM foi atualizado
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            setupUpperCaseInputs();
+            updateNavigationButtons();
+            const responsavelField = document.getElementById('responsavel');
+            if (responsavelField) {
+                responsavelField.focus();
+            }
+        });
+    });
 }
 
 function closeFormModal(showCancelMessage = false) {
@@ -464,10 +538,9 @@ function closeFormModal(showCancelMessage = false) {
     }
 }
 
-// Continuação do script.js
-
 async function handleSubmit(event) {
     event.preventDefault();
+    console.log('💾 Salvando cotação...');
     
     const formData = {
         responsavel: document.getElementById('responsavel').value,
@@ -550,10 +623,17 @@ async function handleSubmit(event) {
 }
 
 async function editCotacao(id) {
+    console.log('✏️ Editando cotação:', id);
     const cotacao = cotacoes.find(c => String(c.id) === String(id));
     if (!cotacao) {
         showToast('Cotação não encontrada!', 'error');
         return;
+    }
+    
+    // Remove modal existente se houver
+    const existingModal = document.getElementById('formModal');
+    if (existingModal) {
+        existingModal.remove();
     }
     
     editingId = id;
@@ -682,11 +762,18 @@ async function editCotacao(id) {
 
     document.body.insertAdjacentHTML('beforeend', modalHTML);
     
-    setTimeout(() => {
-        setupUpperCaseInputs();
-        updateNavigationButtons();
-    }, 100);
+    // Usar requestAnimationFrame para garantir que o DOM foi atualizado
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            setupUpperCaseInputs();
+            updateNavigationButtons();
+        });
+    });
 }
+
+// ====================
+// CRUD OPERATIONS
+// ====================
 
 async function deleteCotacao(id) {
     if (!confirm('Tem certeza que deseja excluir esta cotação?')) return;
@@ -781,7 +868,12 @@ async function toggleStatus(id) {
     }
 }
 
+// ====================
+// VIEW MODAL
+// ====================
+
 function viewCotacao(id) {
+    console.log('👁️ Visualizando cotação:', id);
     const cotacao = cotacoes.find(c => String(c.id) === String(id));
     if (!cotacao) return;
     
@@ -839,6 +931,10 @@ function closeInfoModal() {
         modal.classList.remove('show');
     }
 }
+
+// ====================
+// DISPLAY UPDATES
+// ====================
 
 function filterCotacoes() {
     updateTable();
@@ -984,30 +1080,4 @@ function getCotacoesForCurrentMonth() {
         return cotacaoDate.getMonth() === currentMonth.getMonth() &&
                cotacaoDate.getFullYear() === currentMonth.getFullYear();
     });
-}
-
-function formatDate(dateString) {
-    if (!dateString) return '-';
-    const date = new Date(dateString + 'T00:00:00');
-    return date.toLocaleDateString('pt-BR');
-}
-
-function formatCurrency(value) {
-    return `R$ ${parseFloat(value).toFixed(2).replace('.', ',')}`;
-}
-
-function showToast(message, type = 'success') {
-    const oldMessages = document.querySelectorAll('.floating-message');
-    oldMessages.forEach(msg => msg.remove());
-    
-    const messageDiv = document.createElement('div');
-    messageDiv.className = `floating-message ${type}`;
-    messageDiv.textContent = message;
-    
-    document.body.appendChild(messageDiv);
-    
-    setTimeout(() => {
-        messageDiv.style.animation = 'slideOut 0.3s ease forwards';
-        setTimeout(() => messageDiv.remove(), 300);
-    }, 3000);
 }
