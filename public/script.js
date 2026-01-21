@@ -349,6 +349,8 @@ function openFormModal() {
                                         <option value="ROBERTO">ROBERTO</option>
                                         <option value="ISAQUE">ISAQUE</option>
                                         <option value="MIGUEL">MIGUEL</option>
+                                        <option value="GUSTAVO">GUSTAVO</option>
+                                        <option value="LUIZ">LUIZ</option>
 
                                     </select>
                                 </div>
