@@ -327,6 +327,7 @@ function openFormModal() {
             <div class="modal-content" style="max-width: 1200px;">
                 <div class="modal-header">
                     <h3 class="modal-title">Nova Cotação de Frete</h3>
+                    <button class="close-modal" onclick="closeFormModal(true)">✕</button>
                 </div>
                 
                 <div class="tabs-container">
@@ -566,6 +567,7 @@ async function editCotacao(id) {
             <div class="modal-content" style="max-width: 1200px;">
                 <div class="modal-header">
                     <h3 class="modal-title">Editar Cotação de Frete</h3>
+                    <button class="close-modal" onclick="closeFormModal(true)">✕</button>
                 </div>
                 
                 <div class="tabs-container">
