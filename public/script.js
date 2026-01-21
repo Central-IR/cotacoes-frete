@@ -386,6 +386,7 @@ function openFormModal() {
                                         <option value="BROSLOG">BROSLOG</option>
                                         <option value="MOVVI">MOVVI</option>
                                         <option value="FAVORITA TRANSPORTES">FAVORITA TRANSPORTES</option>
+                                        <option value="SNT LOG LTDA">SNT LOG LTDA</option>
                                         <option value="CORREIOS">CORREIOS</option>
                                     </select>
                                 </div>
@@ -627,6 +628,7 @@ async function editCotacao(id) {
                                         <option value="BROSLOG" ${cotacao.transportadora === 'BROSLOG' ? 'selected' : ''}>BROSLOG</option>
                                         <option value="MOVVI" ${cotacao.transportadora === 'MOVVI' ? 'selected' : ''}>MOVVI</option>
                                         <option value="FAVORITA TRANSPORTES" ${cotacao.transportadora === 'FAVORITA TRANSPORTES' ? 'selected' : ''}>FAVORITA TRANSPORTES</option>
+                                        <option value="SNT LOG LTDA" ${cotacao.transportadora === 'SNT LOG LTDA' ? 'selected' : ''}>SNT LOG LTDA</option>
                                         <option value="CORREIOS" ${cotacao.transportadora === 'CORREIOS' ? 'selected' : ''}>CORREIOS</option>
                                     </select>
                                 </div>
