@@ -383,7 +383,7 @@ function openFormModal() {
                                         <option value="TG TRANSPORTES">TG TRANSPORTES</option>
                                         <option value="BROSLOG">BROSLOG</option>
                                         <option value="MOVVI">MOVVI</option>
-                                        <option value="FAVORITA">FAVORITA</option>
+                                        <option value="FAVORITA TRANSPORTES">FAVORITA TRANSPORTES</option>
                                         <option value="CORREIOS">CORREIOS</option>
                                     </select>
                                 </div>
