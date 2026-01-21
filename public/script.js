@@ -435,7 +435,7 @@ function openFormModal() {
                             <button type="button" id="btnPrevious" onclick="previousTab()" class="secondary" style="display: none;">Anterior</button>
                             <button type="button" id="btnNext" onclick="nextTab()" class="secondary">Próximo</button>
                             <button type="submit" id="btnSave" class="save" style="display: none;">Salvar Cotação</button>
-                            <button type="button" onclick="closeFormModal(true)" class="secondary">Cancelar</button>
+                            <button type="button" onclick="closeFormModal(true)" class="cancel-close">Cancelar</button>
                         </div>
                     </form>
                 </div>
@@ -676,7 +676,7 @@ async function editCotacao(id) {
                             <button type="button" id="btnPrevious" onclick="previousTab()" class="secondary" style="display: none;">Anterior</button>
                             <button type="button" id="btnNext" onclick="nextTab()" class="secondary">Próximo</button>
                             <button type="submit" id="btnSave" class="save" style="display: none;">Atualizar Cotação</button>
-                            <button type="button" onclick="closeFormModal(true)" class="secondary">Cancelar</button>
+                            <button type="button" onclick="closeFormModal(true)" class="cancel-close">Cancelar</button>
                         </div>
                     </form>
                 </div>
