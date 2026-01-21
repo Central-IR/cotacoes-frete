@@ -796,6 +796,10 @@ button.success, button.save, button[type="submit"], .action-btn.success {
 }
 
 button.secondary {
+    background: #6B7280;
+}
+
+button.cancel-close {
     background: #EF4444;
 }
 
