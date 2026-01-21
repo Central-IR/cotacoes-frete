@@ -799,10 +799,6 @@ button.secondary {
     background: #6B7280;
 }
 
-button[onclick*="closeFormModal"], button[onclick*="closeInfoModal"] {
-    background: var(--btn-delete);
-}
-
 button.small {
     padding: 8px 12px;
     font-size: 0.85rem;
