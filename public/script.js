@@ -389,6 +389,8 @@ function openFormModal() {
                                         <option value="SNT LOG LTDA">SNT LOG LTDA</option>
                                         <option value="TRANSLOVATO">TRANSLOVATO</option>
                                         <option value="TODO BRASIL">TODO BRASIL</option>
+                                        <option value="AZURE">AZURE</option>
+                                        <option value="RODONAVES">RODONAVES</option>
                                         <option value="CORREIOS">CORREIOS</option>
                                     </select>
                                 </div>
