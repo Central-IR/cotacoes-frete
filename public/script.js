@@ -391,6 +391,7 @@ function openFormModal() {
                                         <option value="TODO BRASIL">TODO BRASIL</option>
                                         <option value="AZURE">AZURE</option>
                                         <option value="RODONAVES">RODONAVES</option>
+                                        <option value="TOTAL EXPRESS">TOTAL EXPRESS</option>
                                         <option value="CORREIOS">CORREIOS</option>
                                     </select>
                                 </div>
@@ -635,6 +636,7 @@ async function editCotacao(id) {
                                         <option value="SNT LOG LTDA" ${cotacao.transportadora === 'SNT LOG LTDA' ? 'selected' : ''}>SNT LOG LTDA</option>
                                         <option value="TRANSLOVATO" ${cotacao.transportadora === 'TRANSLOVATO' ? 'selected' : ''}>TRANSLOVATO</option>
                                         <option value="TODO BRASIL" ${cotacao.transportadora === 'TODO BRASIL' ? 'selected' : ''}>TODO BRASIL</option>
+                                        <option value="TOTAL EXPRESS" ${cotacao.transportadora === 'TOTAL EXPRESS' ? 'selected' : ''}>TOTAL EXPRESS</option>
                                         <option value="CORREIOS" ${cotacao.transportadora === 'CORREIOS' ? 'selected' : ''}>CORREIOS</option>
                                     </select>
                                 </div>
