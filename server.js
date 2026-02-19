@@ -160,10 +160,40 @@ app.get('/health', async (req, res) => {
 // Aplicar autenticação em todas as rotas da API
 app.use('/api', verificarAutenticacao);
 
-// Listar todas as cotações
+// Listar cotações (com filtro opcional por mês/ano)
 app.get('/api/cotacoes', async (req, res) => {
     try {
-        console.log('🔍 Buscando cotações...');
+        const { mes, ano } = req.query;
+
+        if (mes !== undefined && ano !== undefined) {
+            const month = parseInt(mes); // 0-based (Janeiro = 0)
+            const year = parseInt(ano);
+
+            const startDate = new Date(year, month, 1);
+            const endDate = new Date(year, month + 1, 0);
+            const startStr = startDate.toISOString().split('T')[0];
+            const endStr = endDate.toISOString().split('T')[0];
+
+            console.log(`🔍 Buscando cotações de ${startStr} a ${endStr}...`);
+
+            const { data, error } = await supabase
+                .from('cotacoes')
+                .select('*')
+                .gte('dataCotacao', startStr)
+                .lte('dataCotacao', endStr)
+                .order('dataCotacao', { ascending: false });
+
+            if (error) {
+                console.error('❌ Erro ao buscar por mês:', error);
+                throw error;
+            }
+
+            console.log(`✅ ${data?.length || 0} cotações encontradas para ${startStr} ~ ${endStr}`);
+            return res.json(data || []);
+        }
+
+        // Sem filtro: retornar todas (compatibilidade retroativa)
+        console.log('🔍 Buscando todas as cotações...');
         const { data, error } = await supabase
             .from('cotacoes')
             .select('*')
