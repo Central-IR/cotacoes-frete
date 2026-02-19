@@ -10,6 +10,7 @@ let currentInfoTab = 0;
 let isOnline = false;
 let sessionToken = null;
 let lastDataHash = '';
+let isLoadingMonth = false;
 
 const tabs = ['tab-geral', 'tab-transportadora', 'tab-detalhes'];
 
@@ -90,26 +91,22 @@ async function checkServerStatus() {
             headers['X-Session-Token'] = sessionToken;
         }
 
-        const response = await fetch(`${API_URL}/cotacoes`, {
+        // Usar /health para verificar status sem carregar dados
+        const healthResponse = await fetch(`${API_URL.replace('/api', '')}/health`, {
             method: 'GET',
             headers: headers,
-            mode: 'cors'
+            mode: 'cors',
+            cache: 'no-cache'
         });
 
-        if (!DEVELOPMENT_MODE && response.status === 401) {
-            sessionStorage.removeItem('cotacoesFreteSession');
-            mostrarTelaAcessoNegado('Sua sessão expirou');
-            return false;
-        }
-
         const wasOffline = !isOnline;
-        isOnline = response.ok;
-        
+        isOnline = healthResponse.ok;
+
         if (wasOffline && isOnline) {
             console.log('✅ SERVIDOR ONLINE');
             await loadCotacoes();
         }
-        
+
         updateConnectionStatus();
         return isOnline;
     } catch (error) {
@@ -129,27 +126,31 @@ function updateConnectionStatus() {
 
 function startPolling() {
     loadCotacoes();
+    // Atualiza a cada 30s para reduzir carga (dados são por mês)
     setInterval(() => {
-        if (isOnline) loadCotacoes();
-    }, 10000);
+        if (isOnline && !isLoadingMonth) loadCotacoes();
+    }, 30000);
 }
 
 async function loadCotacoes() {
     if (!isOnline && !DEVELOPMENT_MODE) return;
 
     try {
-        const headers = {
-            'Accept': 'application/json'
-        };
-        
+        const headers = { 'Accept': 'application/json' };
         if (!DEVELOPMENT_MODE && sessionToken) {
             headers['X-Session-Token'] = sessionToken;
         }
 
-        const response = await fetch(`${API_URL}/cotacoes`, {
+        // Buscar apenas o mês/ano atual — sem acumular dados
+        const mes = currentMonth.getMonth();
+        const ano = currentMonth.getFullYear();
+        const url = `${API_URL}/cotacoes?mes=${mes}&ano=${ano}`;
+
+        const response = await fetch(url, {
             method: 'GET',
             headers: headers,
-            mode: 'cors'
+            mode: 'cors',
+            cache: 'no-cache'
         });
 
         if (!DEVELOPMENT_MODE && response.status === 401) {
@@ -164,16 +165,14 @@ async function loadCotacoes() {
         }
 
         const data = await response.json();
+        // Substituir completamente — sem acúmulo de meses anteriores
         cotacoes = data.map(c => ({
             ...c,
             negocioFechado: c.negocioFechado || c.status === 'fechado' || false
         }));
-        
-        const newHash = JSON.stringify(cotacoes.map(c => c.id));
-        if (newHash !== lastDataHash) {
-            lastDataHash = newHash;
-            updateDisplay();
-        }
+
+        lastDataHash = JSON.stringify(cotacoes.map(c => c.id));
+        updateDisplay();
     } catch (error) {
         console.error('❌ Erro ao carregar:', error);
     }
@@ -181,7 +180,12 @@ async function loadCotacoes() {
 
 function changeMonth(direction) {
     currentMonth.setMonth(currentMonth.getMonth() + direction);
-    updateDisplay();
+    // Descartar dados do mês anterior e buscar o novo mês
+    cotacoes = [];
+    lastDataHash = '';
+    isLoadingMonth = true;
+    updateDisplay(); // Atualiza UI imediatamente com indicador de carregamento
+    loadCotacoes().finally(() => { isLoadingMonth = false; });
 }
 
 function updateMonthDisplay() {
@@ -912,13 +916,36 @@ function updateTable() {
     }
     
     if (filteredCotacoes.length === 0) {
-        container.innerHTML = `
-            <tr>
-                <td colspan="9" style="text-align: center; padding: 2rem;">
-                    Nenhuma cotação encontrada
-                </td>
-            </tr>
-        `;
+        if (isLoadingMonth) {
+            container.innerHTML = `
+                <tr>
+                    <td colspan="9" style="text-align: center; padding: 2.5rem;">
+                        <div style="display: inline-flex; align-items: center; gap: 12px; color: var(--text-secondary, #aaa);">
+                            <div style="
+                                width: 22px; height: 22px;
+                                border-radius: 50%;
+                                border: 2.5px solid transparent;
+                                border-top-color: #e07b00;
+                                border-right-color: #f5a623;
+                                border-bottom-color: transparent;
+                                border-left-color: transparent;
+                                animation: spinLoader 0.75s linear infinite;
+                                flex-shrink: 0;
+                            "></div>
+                            <span style="font-size: 0.95rem; letter-spacing: 0.01em;">Carregando...</span>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        } else {
+            container.innerHTML = `
+                <tr>
+                    <td colspan="9" style="text-align: center; padding: 2rem;">
+                        Nenhum registro encontrado
+                    </td>
+                </tr>
+            `;
+        }
         return;
     }
     
@@ -995,11 +1022,8 @@ function updateFilters() {
 }
 
 function getCotacoesForCurrentMonth() {
-    return cotacoes.filter(cotacao => {
-        const cotacaoDate = new Date(cotacao.dataCotacao + 'T00:00:00');
-        return cotacaoDate.getMonth() === currentMonth.getMonth() &&
-               cotacaoDate.getFullYear() === currentMonth.getFullYear();
-    });
+    // Os dados em `cotacoes` já foram buscados filtrados pelo mês/ano no servidor
+    return cotacoes;
 }
 
 function formatDate(dateString) {
