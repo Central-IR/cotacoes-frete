@@ -8,11 +8,6 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <!-- Splash Screen -->
-    <div class="splash-screen" id="splashScreen">
-        <div class="loader"></div>
-    </div>
-
     <div class="app-content">
         <div class="container">
             <div class="header">
@@ -212,13 +207,6 @@
             </div>
         </div>
     </div>
-
-    <script>
-        setTimeout(() => {
-            const splash = document.getElementById('splashScreen');
-            if (splash) splash.style.display = 'none';
-        }, 3000);
-    </script>
     <script src="script.js"></script>
     <script src="calendar.js"></script>
 </body>
