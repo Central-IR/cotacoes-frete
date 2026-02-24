@@ -81,21 +81,6 @@ body {
     }
 }
 
-/* SPLASH SCREEN */
-.splash-screen {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: var(--bg-secondary);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 99999;
-    animation: splashFadeOut 0.0s ease 2.5s forwards;
-}
-
 @keyframes splashFadeOut {
     to { 
         opacity: 0; 
