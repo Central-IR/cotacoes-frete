@@ -173,6 +173,55 @@ async function loadTransportadorasCache() {
     }
 }
 
+async function syncData() {
+    const btn = document.getElementById('syncBtn');
+    if (btn) {
+        btn.classList.add('syncing');
+        btn.disabled = true;
+    }
+
+    try {
+        const headers = { 'Accept': 'application/json' };
+        if (!DEVELOPMENT_MODE && sessionToken) headers['X-Session-Token'] = sessionToken;
+
+        // Sincroniza cotações do mês atual
+        const mes = currentMonth.getMonth();
+        const ano = currentMonth.getFullYear();
+        const response = await fetch(`${API_URL}/cotacoes?mes=${mes}&ano=${ano}`, {
+            method: 'GET', headers, mode: 'cors', cache: 'no-cache'
+        });
+
+        if (!DEVELOPMENT_MODE && response.status === 401) {
+            sessionStorage.removeItem('cotacoesFreteSession');
+            mostrarTelaAcessoNegado('Sua sessão expirou');
+            return;
+        }
+
+        if (!response.ok) throw new Error(`Erro ao sincronizar: ${response.status}`);
+
+        const data = await response.json();
+        cotacoes = data.map(c => ({ ...c, negocioFechado: c.negocioFechado || c.status === 'fechado' || false }));
+        lastDataHash = JSON.stringify(cotacoes.map(c => c.id));
+
+        // Recarrega transportadoras do banco
+        await loadTransportadorasCache();
+
+        isOnline = true;
+        updateConnectionStatus();
+        updateDisplay();
+        showToast('Dados sincronizados', 'success');
+
+    } catch (error) {
+        console.error('Erro na sincronização:', error);
+        showToast('Erro ao sincronizar', 'error');
+    } finally {
+        if (btn) {
+            btn.classList.remove('syncing');
+            btn.disabled = false;
+        }
+    }
+}
+
 function buildTransportadoraOptions(selectedValue = '') {
     if (!transportadorasCache.length) return '<option value="">Carregando...</option>';
     return '<option value="">Selecione...</option>' +
