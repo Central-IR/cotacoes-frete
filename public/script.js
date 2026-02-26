@@ -10,9 +10,21 @@ let currentInfoTab = 0;
 let isOnline = false;
 let sessionToken = null;
 let lastDataHash = '';
-let isLoadingMonth = false;
+let currentFetchController = null;
+let currentUserName = null;
+const KNOWN_RESPONSAVEIS = ['ROBERTO', 'ISAQUE', 'MIGUEL', 'GUSTAVO', 'LUIZ'];
+let transportadorasCache = []; // nomes carregados da app Transportadoras
 
 const tabs = ['tab-geral', 'tab-transportadora', 'tab-detalhes'];
+
+function detectResponsavelFromUser(name) {
+    if (!name) return null;
+    const upper = name.trim().toUpperCase();
+    for (const r of KNOWN_RESPONSAVEIS) {
+        if (upper === r || upper.startsWith(r + ' ') || upper.startsWith(r + '.')) return r;
+    }
+    return null;
+}
 
 console.log('🚀 Cotações de Frete iniciada');
 console.log('📍 API URL:', API_URL);
@@ -62,6 +74,21 @@ function verificarAutenticacao() {
     }
 
     inicializarApp();
+    fetchSessionUser();
+}
+
+async function fetchSessionUser() {
+    if (!sessionToken) return;
+    try {
+        const r = await fetch(`${PORTAL_URL}/api/verify-session`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionToken })
+        });
+        if (!r.ok) return;
+        const d = await r.json();
+        if (d.valid && d.session && d.session.name) currentUserName = d.session.name;
+    } catch (e) { /* silencioso */ }
 }
 
 function mostrarTelaAcessoNegado(mensagem = 'NÃO AUTORIZADO') {
@@ -75,46 +102,10 @@ function mostrarTelaAcessoNegado(mensagem = 'NÃO AUTORIZADO') {
 }
 
 function inicializarApp() {
-    updateDisplay();
-    checkServerStatus();
-    setInterval(checkServerStatus, 15000);
-    startPolling();
-}
-
-async function checkServerStatus() {
-    try {
-        const headers = {
-            'Accept': 'application/json'
-        };
-        
-        if (!DEVELOPMENT_MODE && sessionToken) {
-            headers['X-Session-Token'] = sessionToken;
-        }
-
-        // Usar /health para verificar status sem carregar dados
-        const healthResponse = await fetch(`${API_URL.replace('/api', '')}/health`, {
-            method: 'GET',
-            headers: headers,
-            mode: 'cors',
-            cache: 'no-cache'
-        });
-
-        const wasOffline = !isOnline;
-        isOnline = healthResponse.ok;
-
-        if (wasOffline && isOnline) {
-            console.log('✅ SERVIDOR ONLINE');
-            await loadCotacoes();
-        }
-
-        updateConnectionStatus();
-        return isOnline;
-    } catch (error) {
-        console.error('❌ Erro ao verificar servidor:', error);
-        isOnline = false;
-        updateConnectionStatus();
-        return false;
-    }
+    updateMonthDisplay();
+    loadCotacoesDirectly();
+    loadTransportadorasCache();
+    setInterval(() => { if (isOnline) loadCotacoesDirectly(); }, 30000);
 }
 
 function updateConnectionStatus() {
@@ -124,68 +115,80 @@ function updateConnectionStatus() {
     }
 }
 
-function startPolling() {
-    loadCotacoes();
-    // Atualiza a cada 30s para reduzir carga (dados são por mês)
-    setInterval(() => {
-        if (isOnline && !isLoadingMonth) loadCotacoes();
-    }, 30000);
-}
 
-async function loadCotacoes() {
-    if (!isOnline && !DEVELOPMENT_MODE) return;
-
+async function loadCotacoesDirectly() {
+    if (currentFetchController) currentFetchController.abort();
+    currentFetchController = new AbortController();
+    const signal = currentFetchController.signal;
+    const mesFetch = currentMonth.getMonth();
+    const anoFetch = currentMonth.getFullYear();
     try {
         const headers = { 'Accept': 'application/json' };
-        if (!DEVELOPMENT_MODE && sessionToken) {
-            headers['X-Session-Token'] = sessionToken;
-        }
-
-        // Buscar apenas o mês/ano atual — sem acumular dados
-        const mes = currentMonth.getMonth();
-        const ano = currentMonth.getFullYear();
-        const url = `${API_URL}/cotacoes?mes=${mes}&ano=${ano}`;
-
-        const response = await fetch(url, {
-            method: 'GET',
-            headers: headers,
-            mode: 'cors',
-            cache: 'no-cache'
-        });
-
+        if (!DEVELOPMENT_MODE && sessionToken) headers['X-Session-Token'] = sessionToken;
+        const response = await fetch(
+            `${API_URL}/cotacoes?mes=${mesFetch}&ano=${anoFetch}`,
+            { method: 'GET', headers, mode: 'cors', cache: 'no-cache', signal }
+        );
         if (!DEVELOPMENT_MODE && response.status === 401) {
             sessionStorage.removeItem('cotacoesFreteSession');
             mostrarTelaAcessoNegado('Sua sessão expirou');
             return;
         }
-
         if (!response.ok) {
-            console.error('❌ Erro ao carregar cotações:', response.status);
+            isOnline = false;
+            updateConnectionStatus();
+            setTimeout(() => loadCotacoesDirectly(), 5000);
             return;
         }
-
         const data = await response.json();
-        // Substituir completamente — sem acúmulo de meses anteriores
-        cotacoes = data.map(c => ({
-            ...c,
-            negocioFechado: c.negocioFechado || c.status === 'fechado' || false
-        }));
-
+        if (mesFetch !== currentMonth.getMonth() || anoFetch !== currentMonth.getFullYear()) return;
+        cotacoes = data.map(c => ({ ...c, negocioFechado: c.negocioFechado || c.status === 'fechado' || false }));
+        isOnline = true;
+        updateConnectionStatus();
         lastDataHash = JSON.stringify(cotacoes.map(c => c.id));
+        currentFetchController = null;
         updateDisplay();
     } catch (error) {
-        console.error('❌ Erro ao carregar:', error);
+        if (error.name === 'AbortError') return;
+        isOnline = false;
+        updateConnectionStatus();
+        setTimeout(() => loadCotacoesDirectly(), 5000);
     }
+}
+
+// Busca nomes das transportadoras cadastradas na app Transportadoras
+async function loadTransportadorasCache() {
+    try {
+        const TRANSP_API = 'https://transportadoras.onrender.com/api';
+        const headers = { 'Accept': 'application/json' };
+        if (!DEVELOPMENT_MODE && sessionToken) headers['X-Session-Token'] = sessionToken;
+        const response = await fetch(`${TRANSP_API}/transportadoras?page=1&limit=200`, { headers, mode: 'cors' });
+        if (!response.ok) return;
+        const result = await response.json();
+        const lista = Array.isArray(result) ? result : (result.data || []);
+        transportadorasCache = lista.map(t => t.nome.trim().toUpperCase()).filter(Boolean).sort();
+        console.log(`Transportadoras carregadas: ${transportadorasCache.length}`);
+    } catch (e) {
+        console.error('Erro ao carregar transportadoras:', e);
+    }
+}
+
+function buildTransportadoraOptions(selectedValue = '') {
+    if (!transportadorasCache.length) return '<option value="">Carregando...</option>';
+    return '<option value="">Selecione...</option>' +
+        transportadorasCache.map(nome =>
+            `<option value="${nome}" ${nome === selectedValue ? 'selected' : ''}>${nome}</option>`
+        ).join('');
 }
 
 function changeMonth(direction) {
     currentMonth.setMonth(currentMonth.getMonth() + direction);
-    // Descartar dados do mês anterior e buscar o novo mês
     cotacoes = [];
     lastDataHash = '';
-    isLoadingMonth = true;
-    updateDisplay(); // Atualiza UI imediatamente com indicador de carregamento
-    loadCotacoes().finally(() => { isLoadingMonth = false; });
+    updateMonthDisplay();
+    const container = document.getElementById('cotacoesContainer');
+    if (container) container.innerHTML = '';
+    loadCotacoesDirectly();
 }
 
 function updateMonthDisplay() {
@@ -347,16 +350,8 @@ function openFormModal() {
                         <div class="tab-content active" id="tab-geral">
                             <div class="form-grid">
                                 <div class="form-group">
-                                    <label for="responsavel">Responsável pela Cotação *</label>
-                                    <select id="responsavel" required>
-                                        <option value="">Selecione...</option>
-                                        <option value="ROBERTO">ROBERTO</option>
-                                        <option value="ISAQUE">ISAQUE</option>
-                                        <option value="MIGUEL">MIGUEL</option>
-                                        <option value="GUSTAVO">GUSTAVO</option>
-                                        <option value="LUIZ">LUIZ</option>
-
-                                    </select>
+                                    <label for="responsavel">Responsável pela Cotação</label>
+                                    <input type="text" id="responsavel" value="${detectResponsavelFromUser(currentUserName) || ''}" readonly style="background:var(--input-bg);cursor:default;" tabindex="-1">
                                 </div>
                                 <div class="form-group">
                                     <label for="documento">Documento *</label>
@@ -378,26 +373,7 @@ function openFormModal() {
                             <div class="form-grid">
                                 <div class="form-group">
                                     <label for="transportadora">Transportadora</label>
-                                    <select id="transportadora">
-                                        <option value="">Selecione...</option>
-                                        <option value="TNT MERCÚRIO">TNT MERCÚRIO</option>
-                                        <option value="JAMEF">JAMEF</option>
-                                        <option value="BRASPRESS">BRASPRESS</option>
-                                        <option value="GENEROSO">GENEROSO</option>
-                                        <option value="CONTINENTAL">CONTINENTAL</option>
-                                        <option value="JEOLOG">JEOLOG</option>
-                                        <option value="TG TRANSPORTES">TG TRANSPORTES</option>
-                                        <option value="BROSLOG">BROSLOG</option>
-                                        <option value="MOVVI">MOVVI</option>
-                                        <option value="FAVORITA TRANSPORTES">FAVORITA TRANSPORTES</option>
-                                        <option value="SNT LOG LTDA">SNT LOG LTDA</option>
-                                        <option value="TRANSLOVATO">TRANSLOVATO</option>
-                                        <option value="TODO BRASIL">TODO BRASIL</option>
-                                        <option value="AZURE">AZURE</option>
-                                        <option value="RODONAVES">RODONAVES</option>
-                                        <option value="TOTAL EXPRESS">TOTAL EXPRESS</option>
-                                        <option value="CORREIOS">CORREIOS</option>
-                                    </select>
+                                    <select id="transportadora">${buildTransportadoraOptions()}</select>
                                 </div>
                                 <div class="form-group">
                                     <label for="destino">Cidade-UF *</label>
@@ -578,7 +554,7 @@ async function editCotacao(id) {
         <div class="modal-overlay" id="formModal" style="display: flex;">
             <div class="modal-content" style="max-width: 1200px;">
                 <div class="modal-header">
-                    <h3 class="modal-title">Editar Cotação de Frete</h3>
+                    <h3 class="modal-title">Editar - ${cotacao.transportadora || "Cotação de Frete"}</h3>
                     <button class="close-modal" onclick="closeFormModal(true)">✕</button>
                 </div>
                 
@@ -595,15 +571,8 @@ async function editCotacao(id) {
                         <div class="tab-content active" id="tab-geral">
                             <div class="form-grid">
                                 <div class="form-group">
-                                    <label for="responsavel">Responsável pela Cotação *</label>
-                                    <select id="responsavel" required>
-                                        <option value="">Selecione...</option>
-                                        <option value="ROBERTO" ${cotacao.responsavel === 'ROBERTO' ? 'selected' : ''}>ROBERTO</option>
-                                        <option value="ISAQUE" ${cotacao.responsavel === 'ISAQUE' ? 'selected' : ''}>ISAQUE</option>
-                                        <option value="MIGUEL" ${cotacao.responsavel === 'MIGUEL' ? 'selected' : ''}>MIGUEL</option>
-                                        <option value="GUSTAVO" ${cotacao.responsavel === 'GUSTAVO' ? 'selected' : ''}>GUSTAVO</option>
-                                        <option value="LUIZ" ${cotacao.responsavel === 'LUIZ' ? 'selected' : ''}>LUIZ</option>
-                                    </select>
+                                    <label for="responsavel">Responsável pela Cotação</label>
+                                    <input type="text" id="responsavel" value="${toUpperCase(cotacao.responsavel || '')}" readonly style="background:var(--input-bg);cursor:default;" tabindex="-1">
                                 </div>
                                 <div class="form-group">
                                     <label for="documento">Documento *</label>
@@ -625,24 +594,7 @@ async function editCotacao(id) {
                             <div class="form-grid">
                                 <div class="form-group">
                                     <label for="transportadora">Transportadora</label>
-                                    <select id="transportadora">
-                                        <option value="">Selecione...</option>
-                                        <option value="TNT MERCÚRIO" ${cotacao.transportadora === 'TNT MERCÚRIO' ? 'selected' : ''}>TNT MERCÚRIO</option>
-                                        <option value="JAMEF" ${cotacao.transportadora === 'JAMEF' ? 'selected' : ''}>JAMEF</option>
-                                        <option value="BRASPRESS" ${cotacao.transportadora === 'BRASPRESS' ? 'selected' : ''}>BRASPRESS</option>
-                                        <option value="GENEROSO" ${cotacao.transportadora === 'GENEROSO' ? 'selected' : ''}>GENEROSO</option>
-                                        <option value="CONTINENTAL" ${cotacao.transportadora === 'CONTINENTAL' ? 'selected' : ''}>CONTINENTAL</option>
-                                        <option value="JEOLOG" ${cotacao.transportadora === 'JEOLOG' ? 'selected' : ''}>JEOLOG</option>
-                                        <option value="TG TRANSPORTES" ${cotacao.transportadora === 'TG TRANSPORTES' ? 'selected' : ''}>TG TRANSPORTES</option>
-                                        <option value="BROSLOG" ${cotacao.transportadora === 'BROSLOG' ? 'selected' : ''}>BROSLOG</option>
-                                        <option value="MOVVI" ${cotacao.transportadora === 'MOVVI' ? 'selected' : ''}>MOVVI</option>
-                                        <option value="FAVORITA TRANSPORTES" ${cotacao.transportadora === 'FAVORITA TRANSPORTES' ? 'selected' : ''}>FAVORITA TRANSPORTES</option>
-                                        <option value="SNT LOG LTDA" ${cotacao.transportadora === 'SNT LOG LTDA' ? 'selected' : ''}>SNT LOG LTDA</option>
-                                        <option value="TRANSLOVATO" ${cotacao.transportadora === 'TRANSLOVATO' ? 'selected' : ''}>TRANSLOVATO</option>
-                                        <option value="TODO BRASIL" ${cotacao.transportadora === 'TODO BRASIL' ? 'selected' : ''}>TODO BRASIL</option>
-                                        <option value="TOTAL EXPRESS" ${cotacao.transportadora === 'TOTAL EXPRESS' ? 'selected' : ''}>TOTAL EXPRESS</option>
-                                        <option value="CORREIOS" ${cotacao.transportadora === 'CORREIOS' ? 'selected' : ''}>CORREIOS</option>
-                                    </select>
+                                    <select id="transportadora">${buildTransportadoraOptions(cotacao.transportadora || '')}</select>
                                 </div>
                                 <div class="form-group">
                                     <label for="destino">Cidade-UF *</label>
@@ -807,7 +759,7 @@ function viewCotacao(id) {
     
     currentInfoTab = 0;
     
-    document.getElementById('modalDocumento').textContent = toUpperCase(cotacao.documento || 'S/N');
+    document.getElementById('modalDocumento').textContent = toUpperCase(cotacao.transportadora || cotacao.documento || 'S/N');
     
     document.getElementById('info-tab-geral').innerHTML = `
         <div class="info-section">
@@ -916,36 +868,8 @@ function updateTable() {
     }
     
     if (filteredCotacoes.length === 0) {
-        if (isLoadingMonth) {
-            container.innerHTML = `
-                <tr>
-                    <td colspan="9" style="text-align: center; padding: 2.5rem;">
-                        <div style="display: inline-flex; align-items: center; gap: 12px; color: var(--text-secondary, #aaa);">
-                            <div style="
-                                width: 22px; height: 22px;
-                                border-radius: 50%;
-                                border: 2.5px solid transparent;
-                                border-top-color: #e07b00;
-                                border-right-color: #f5a623;
-                                border-bottom-color: transparent;
-                                border-left-color: transparent;
-                                animation: spinLoader 0.75s linear infinite;
-                                flex-shrink: 0;
-                            "></div>
-                            <span style="font-size: 0.95rem; letter-spacing: 0.01em;">Carregando...</span>
-                        </div>
-                    </td>
-                </tr>
-            `;
-        } else {
-            container.innerHTML = `
-                <tr>
-                    <td colspan="9" style="text-align: center; padding: 2rem;">
-                        Nenhum registro encontrado
-                    </td>
-                </tr>
-            `;
-        }
+        if (currentFetchController) return; // aguarda resposta — não mostrar vazio ainda
+        container.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:2rem;">Nenhum registro encontrado</td></tr>`;
         return;
     }
     
@@ -986,27 +910,23 @@ function updateTable() {
 }
 
 function updateFilters() {
-    const transportadoras = new Set();
-    const responsaveis = new Set();
-    
-    cotacoes.forEach(c => {
-        if (c.transportadora?.trim()) transportadoras.add(c.transportadora.trim());
-        if (c.responsavel?.trim()) responsaveis.add(c.responsavel.trim());
-    });
-
+    // Transportadoras: sempre do cache da app Transportadoras
     const selectTransportadora = document.getElementById('filterTransportadora');
     if (selectTransportadora) {
         const currentValue = selectTransportadora.value;
         selectTransportadora.innerHTML = '<option value="">Transportadora</option>';
-        Array.from(transportadoras).sort().forEach(t => {
+        transportadorasCache.forEach(nome => {
             const option = document.createElement('option');
-            option.value = t;
-            option.textContent = t;
+            option.value = nome;
+            option.textContent = nome;
             selectTransportadora.appendChild(option);
         });
-        selectTransportadora.value = currentValue;
+        if (transportadorasCache.includes(currentValue)) selectTransportadora.value = currentValue;
     }
 
+    // Responsáveis: dos registros do mês
+    const responsaveis = new Set();
+    cotacoes.forEach(c => { if (c.responsavel?.trim()) responsaveis.add(c.responsavel.trim()); });
     const selectResponsavel = document.getElementById('filterResponsavel');
     if (selectResponsavel) {
         const currentValue = selectResponsavel.value;
