@@ -321,6 +321,43 @@ h2 {
     color: var(--primary);
 }
 
+/* SYNC BUTTON */
+.sync-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 0.4rem;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    margin: 0;
+    width: 32px;
+    height: 32px;
+}
+
+.sync-btn:hover:not(:disabled) {
+    background: var(--input-bg);
+    color: var(--primary);
+    transform: none;
+}
+
+.sync-btn:disabled {
+    background: transparent;
+    opacity: 1;
+    cursor: default;
+}
+
+.sync-btn.syncing svg {
+    animation: spinSync 0.8s linear infinite;
+}
+
+@keyframes spinSync {
+    to { transform: rotate(360deg); }
+}
+
 /* CALENDAR MODAL */
 .calendar-modal {
     display: none;
